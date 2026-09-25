@@ -1,0 +1,9 @@
+{
+  "name": "motorcycle-mom",
+  "private": true,
+  "type": "module",
+  "description": "Por Onde Rodei — mapa dos municípios do Brasil visitados de moto",
+  "scripts": {
+    "dev": "npx -y serve -l 3000 ."
+  }
+}

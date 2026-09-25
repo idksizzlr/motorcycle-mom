@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Por Onde Rodei</title>
+<meta name="description" content="Marque no mapa todas as cidades do Brasil por onde você já passou de moto.">
+<meta name="theme-color" content="#0B6B4C">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B6B4C'/%3E%3Cg fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='17' cy='40' r='9'/%3E%3Ccircle cx='47' cy='40' r='9'/%3E%3Cpath d='M17 40l10-13h11l9 13M31 27l4-9h7'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ============ carregando ============ -->
+<div id="boot" class="loading" style="position:fixed">
+  <div>Ligando o motor…<div class="road-anim"></div></div>
+</div>
+
+<!-- ============ entrar / criar conta ============ -->
+<section id="auth" class="auth" hidden>
+  <div class="auth-hero">
+    <canvas id="heroMap" aria-hidden="true"></canvas>
+    <div class="top">
+      <div class="plate">
+        <svg width="40" height="28" viewBox="0 0 40 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="20" r="6"/><circle cx="32" cy="20" r="6"/><path d="M8 20 L15 11 H23 L28 20"/><path d="M19 11 L22 5 H27"/><path d="M23 11 L32 20"/><path d="M13 11 H10"/></svg>
+        <div><h1>Por onde rodei</h1><small>o Brasil de moto, cidade por cidade</small></div>
+      </div>
+    </div>
+    <div class="bottom">
+      <h2>5.570 cidades esperando por você</h2>
+      <p>Marque no mapa cada município por onde já passou de moto, guarde as lembranças da estrada e veja quem está rodando mais.</p>
+      <span class="km">Próxima saída: o Brasil inteiro</span>
+    </div>
+  </div>
+
+  <div class="auth-side">
+    <div class="auth-card">
+      <div class="auth-tabs" role="tablist">
+        <button role="tab" id="tabLogin" aria-selected="true">Entrar</button>
+        <button role="tab" id="tabSignup" aria-selected="false">Criar conta</button>
+      </div>
+
+      <!-- entrar -->
+      <form id="loginForm" novalidate>
+        <h3>De volta à estrada</h3>
+        <label class="field"><span>E-mail</span><input class="input" id="liEmail" type="email" autocomplete="email" required></label>
+        <label class="field"><span>Senha</span><input class="input" id="liPass" type="password" autocomplete="current-password" required></label>
+        <div class="err" id="liErr" role="alert"></div>
+        <button class="btn" type="submit" id="liBtn">Entrar</button>
+        <button class="linkbtn" type="button" id="forgotBtn">Esqueci minha senha</button>
+      </form>
+
+      <!-- criar conta: 4 paradas -->
+      <form id="signupForm" novalidate hidden>
+        <div class="trail" aria-hidden="true">
+          <div class="asphalt"></div>
+          <span class="stop" style="left:4%"></span><span class="stop" style="left:35%"></span><span class="stop" style="left:66%"></span><span class="stop" style="left:96%"></span>
+          <svg class="rider" id="rider" style="left:4%" width="34" height="24" viewBox="0 0 40 28" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="20" r="6"/><circle cx="32" cy="20" r="6"/><path d="M8 20 L15 11 H23 L28 20"/><path d="M19 11 L22 5 H27"/><path d="M23 11 L32 20"/></svg>
+        </div>
+
+        <div class="step" data-step="0">
+          <div class="steplbl">Parada 1 de 4 · Sua conta</div>
+          <h3>Vamos preparar sua garagem</h3>
+          <div style="display:grid;gap:12px;margin-top:12px">
+            <label class="field"><span>Como quer ser chamada(o)?</span><input class="input" id="suNome" maxlength="40" autocomplete="nickname" placeholder="Ex.: Dona Márcia"></label>
+            <label class="field"><span>E-mail</span><input class="input" id="suEmail" type="email" autocomplete="email"></label>
+            <label class="field"><span>Senha (mínimo 6 caracteres)</span><input class="input" id="suPass" type="password" autocomplete="new-password"></label>
+          </div>
+        </div>
+
+        <div class="step" data-step="1" hidden>
+          <div class="steplbl">Parada 2 de 4 · Você</div>
+          <h3>Você é…</h3>
+          <div class="choices" id="chGenero" style="margin-top:12px">
+            <button type="button" class="choice" data-v="mulher" aria-pressed="false"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="9" r="5"/><path d="M12 14v7M9 18h6"/></svg>Mulher</button>
+            <button type="button" class="choice" data-v="homem" aria-pressed="false"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="14" r="5"/><path d="M14 10l6-6M15 4h5v5"/></svg>Homem</button>
+            <button type="button" class="choice" data-v="outro" aria-pressed="false"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>Outro</button>
+            <button type="button" class="choice" data-v="nao_informado" aria-pressed="false"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 18h.01"/><circle cx="12" cy="12" r="9"/></svg>Prefiro não dizer</button>
+          </div>
+          <p class="muted" style="font-size:13.5px;margin:10px 0 0">Usamos isso para os títulos das conquistas e para o ranking por categoria.</p>
+        </div>
+
+        <div class="step" data-step="2" hidden>
+          <div class="steplbl">Parada 3 de 4 · Na moto</div>
+          <h3>Na moto, você vai…</h3>
+          <div class="choices" id="chPapel" style="margin-top:12px">
+            <button type="button" class="choice" data-v="piloto" aria-pressed="false"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 3v7M4.5 16.5l5.8-3.3M19.5 16.5l-5.8-3.3"/></svg>Pilotando<small>eu que conduzo</small></button>
+            <button type="button" class="choice" data-v="garupa" aria-pressed="false"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20c0-4 3-7 7-7s7 3 7 7"/><circle cx="12" cy="7" r="4"/></svg>Na garupa<small>curtindo a paisagem</small></button>
+            <button type="button" class="choice" data-v="os_dois" aria-pressed="false"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Um pouco de cada<small>depende do dia</small></button>
+          </div>
+          <div class="grid2" style="margin-top:14px">
+            <label class="field"><span>Sua moto (opcional)</span><input class="input" id="suMoto" maxlength="60" placeholder="Ex.: Honda CB 500X"></label>
+            <label class="field"><span>Na estrada desde</span><select class="input" id="suDesde"><option value="">Prefiro não dizer</option></select></label>
+          </div>
+        </div>
+
+        <div class="step" data-step="3" hidden>
+          <div class="steplbl">Parada 4 de 4 · Seu estilo</div>
+          <h3>Qual estrada chama você?</h3>
+          <div class="chips" id="chEstilo" style="margin-top:12px">
+            <button type="button" class="chip" data-v="estrada" aria-pressed="false">Asfalto e estrada</button>
+            <button type="button" class="chip" data-v="serra" aria-pressed="false">Serra e curvas</button>
+            <button type="button" class="chip" data-v="praia" aria-pressed="false">Litoral</button>
+            <button type="button" class="chip" data-v="terra" aria-pressed="false">Terra e trilha</button>
+            <button type="button" class="chip" data-v="de_tudo" aria-pressed="true">De tudo um pouco</button>
+          </div>
+          <label class="field citypick" style="margin-top:14px"><span>Sua cidade (ponto de partida)</span>
+            <input class="input" id="suCidade" autocomplete="off" placeholder="Digite o nome da cidade">
+            <ul id="suCidadeRes" hidden></ul>
+          </label>
+          <label class="switch" style="margin-top:14px"><input type="checkbox" id="suRanking" checked> Quero aparecer no ranking</label>
+        </div>
+
+        <div class="err" id="suErr" role="alert"></div>
+        <div class="step-actions">
+          <button class="btn ghost" type="button" id="suBack" hidden>Voltar</button>
+          <button class="btn" type="submit" id="suNext">Continuar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ============ aplicativo ============ -->
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <div class="plate">
+      <svg width="40" height="28" viewBox="0 0 40 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="20" r="6"/><circle cx="32" cy="20" r="6"/><path d="M8 20 L15 11 H23 L28 20"/><path d="M19 11 L22 5 H27"/><path d="M23 11 L32 20"/><path d="M13 11 H10"/></svg>
+      <div><h1>Por onde rodei</h1><small>o Brasil de moto, cidade por cidade</small></div>
+    </div>
+    <div class="shield" title="Municípios visitados"><span><i>CIDADES</i><b class="num" id="shieldN">0</b></span></div>
+    <button class="me" id="meBtn" title="Meu perfil"><span class="avatar" id="meAv">?</span><span><b id="meName">—</b><small id="meLevel">—</small></span></button>
+    <div class="sync" id="sync" data-s="ok"><span>Tudo salvo</span></div>
+  </header>
+
+  <nav class="nav" id="nav" aria-label="Seções">
+    <button data-v="mapa" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Mapa</button>
+    <button data-v="diario"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>Diário</button>
+    <button data-v="conquistas"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-3 5 3-1.5-8"/></svg>Conquistas</button>
+    <button data-v="ranking"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V11H3v10zM15 21V4H9v17zM21 21v-7h-5v7z"/></svg>Ranking</button>
+    <button data-v="perfil"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Perfil</button>
+    <button data-v="admin" class="admin-tab" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>Admin</button>
+  </nav>
+
+  <!-- mapa -->
+  <main class="view" id="v-mapa">
+    <div class="mapview">
+      <div class="mapwrap" id="wrap">
+        <svg id="map" role="img" aria-label="Mapa dos municípios do Brasil"></svg>
+        <div class="loading" id="mapLoading"><div>Abastecendo o mapa…<div class="road-anim"></div></div></div>
+        <div class="mapsearch">
+          <div class="search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="q" type="search" placeholder="Buscar cidade…" autocomplete="off" aria-label="Buscar município" disabled>
+            <ul class="results" id="res" role="listbox" hidden></ul>
+          </div>
+          <button class="pill" id="quick" aria-pressed="false" title="Cada toque marca ou desmarca a cidade na hora"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Toque rápido</button>
+        </div>
+        <div class="ctrls">
+          <button id="zin" aria-label="Aproximar">+</button>
+          <button id="zout" aria-label="Afastar">−</button>
+          <button id="zall" aria-label="Ver o Brasil inteiro" title="Ver o Brasil inteiro"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        </div>
+        <div class="compare" id="compare" hidden><span id="compareTxt"></span><button id="compareEnd">Fechar</button></div>
+        <div class="legend" id="legend"><span><i class="sw v"></i>Já passei</span><span><i class="sw"></i>Ainda não</span></div>
+        <div class="tip" id="tip" hidden></div>
+        <div class="card" id="card" hidden></div>
+      </div>
+      <aside class="side">
+        <div class="stats">
+          <div class="stat"><b class="num" id="sMun">0</b><span>municípios</span></div>
+          <div class="stat"><b class="num" id="sUf">0</b><span>estados de 27</span></div>
+          <div class="stat"><b class="num" id="sCap">0</b><span>capitais de 27</span></div>
+          <div class="stat"><b class="num" id="sKm">0</b><span>km² de Brasil</span></div>
+        </div>
+        <div class="odo">
+          <div class="lbl"><span>Brasil percorrido</span><span class="num" id="pct">0%</span></div>
+          <div class="bar"><i id="pctBar" style="width:0%"></i></div>
+        </div>
+        <h4>Por estado</h4>
+        <div class="ufl" id="ufList"></div>
+      </aside>
+    </div>
+  </main>
+
+  <main class="view" id="v-diario" hidden>
+    <div class="view-head"><div><h2>Diário de bordo</h2><p id="diarySub">Cada cidade marcada vira uma página.</p></div></div>
+    <div class="diary" id="diary"></div>
+  </main>
+
+  <main class="view" id="v-conquistas" hidden>
+    <div id="levelBox"></div>
+    <div id="badgeBox"></div>
+  </main>
+
+  <main class="view" id="v-ranking" hidden>
+    <div class="view-head"><div><h2>Ranking da estrada</h2><p>Quem já passou por mais cidades. Toque numa pessoa para comparar os mapas.</p></div></div>
+    <div class="rfilters">
+      <div class="chips" id="rGenero">
+        <button class="chip" data-v="" aria-pressed="true">Todo mundo</button>
+        <button class="chip" data-v="mulher" aria-pressed="false">Mulheres</button>
+        <button class="chip" data-v="homem" aria-pressed="false">Homens</button>
+      </div>
+      <div class="chips" id="rPeriodo">
+        <button class="chip" data-v="" aria-pressed="true">Desde sempre</button>
+        <button class="chip" data-v="ano" aria-pressed="false">Este ano</button>
+        <button class="chip" data-v="mes" aria-pressed="false">Este mês</button>
+      </div>
+    </div>
+    <div id="rankBox"></div>
+  </main>
+
+  <main class="view" id="v-perfil" hidden>
+    <div class="view-head"><div><h2>Seu perfil</h2><p id="profSub"></p></div><button class="btn ghost sm" id="logoutBtn">Sair da conta</button></div>
+    <div class="profile">
+      <form class="panel" id="profForm" novalidate>
+        <h3>Dados da garagem</h3>
+        <div class="grid2">
+          <label class="field"><span>Nome</span><input class="input" id="pfNome" maxlength="40"></label>
+          <label class="field"><span>Você é</span><select class="input" id="pfGenero"><option value="mulher">Mulher</option><option value="homem">Homem</option><option value="outro">Outro</option><option value="nao_informado">Prefiro não dizer</option></select></label>
+          <label class="field"><span>Na moto</span><select class="input" id="pfPapel"><option value="piloto">Pilotando</option><option value="garupa">Na garupa</option><option value="os_dois">Um pouco de cada</option></select></label>
+          <label class="field"><span>Estilo</span><select class="input" id="pfEstilo"><option value="estrada">Asfalto e estrada</option><option value="serra">Serra e curvas</option><option value="praia">Litoral</option><option value="terra">Terra e trilha</option><option value="de_tudo">De tudo um pouco</option></select></label>
+          <label class="field"><span>Moto</span><input class="input" id="pfMoto" maxlength="60"></label>
+          <label class="field"><span>Na estrada desde</span><select class="input" id="pfDesde"><option value="">Prefiro não dizer</option></select></label>
+        </div>
+        <label class="field citypick"><span>Cidade de partida</span><input class="input" id="pfCidade" autocomplete="off" placeholder="Digite o nome da cidade"><ul id="pfCidadeRes" hidden></ul></label>
+        <label class="switch"><input type="checkbox" id="pfRanking"> Aparecer no ranking</label>
+        <div class="err" id="pfErr" role="alert"></div>
+        <div><button class="btn" type="submit">Salvar perfil</button></div>
+      </form>
+      <div style="display:grid;gap:16px">
+        <div class="panel">
+          <h3>Trazer marcações antigas</h3>
+          <p class="muted" style="margin:0">Se você usava a versão do computador, clique em “Salvar cópia” lá e depois importe o arquivo aqui. As cidades se juntam às desta conta.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label class="btn ghost sm" for="impFile" style="cursor:pointer">Importar cópia (.json)<input type="file" id="impFile" accept=".json,application/json" hidden></label>
+            <button class="btn ghost sm" id="expBtn">Baixar minhas marcações</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Senha</h3>
+          <form id="pwForm" style="display:grid;gap:10px" novalidate>
+            <label class="field"><span>Nova senha</span><input class="input" id="pwNew" type="password" autocomplete="new-password"></label>
+            <div class="err" id="pwErr" role="alert"></div>
+            <div><button class="btn ghost sm" type="submit">Trocar senha</button></div>
+          </form>
+        </div>
+        <div class="panel">
+          <h3>Excluir conta</h3>
+          <p class="muted" style="margin:0">Apaga para sempre sua conta e todas as cidades marcadas.</p>
+          <div><button class="btn danger sm" id="delMeBtn">Excluir minha conta</button></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <main class="view" id="v-admin" hidden>
+    <div class="view-head"><div><h2>Painel do administrador</h2><p>Gerencie as contas e os dados de quem usa o site.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="admCsv">Baixar planilha (CSV)</button><button class="btn ghost sm" id="admReload">Atualizar</button></div></div>
+    <div class="kpis" id="admKpis"></div>
+    <div class="search" style="max-width:420px;margin-bottom:12px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="admQ" type="search" placeholder="Buscar por nome ou e-mail" autocomplete="off">
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Cidades</th><th>Última viagem</th><th>Último acesso</th><th>Criada em</th><th>Ações</th></tr></thead><tbody id="admRows"></tbody></table></div>
+  </main>
+</div>
+
+<canvas id="fx"></canvas>
+<div class="toast" id="toast" hidden></div>
+<div id="modalRoot"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
