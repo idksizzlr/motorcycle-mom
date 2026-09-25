@@ -370,7 +370,7 @@ async function startHero(){
   const hero = cv.parentElement, hb = hero.getBoundingClientRect();
   const plateBottom = hero.querySelector(".top").getBoundingClientRect().bottom - hb.top;
   const pad = Math.max(14, Math.min(W, H) * .03);
-  const area = [[W * .06, plateBottom + pad], [W - pad, H - pad]];
+  const area = [[W * .16, plateBottom + pad], [W - 10, H - pad]];
   const proj = d3.geoMercator().fitExtent(area, fc);
   const bb = d3.geoPath(proj).bounds(fc), [tx, ty] = proj.translate();
   proj.translate([tx + (area[1][0] - bb[1][0]), ty + (area[0][1] - bb[0][1])]);
