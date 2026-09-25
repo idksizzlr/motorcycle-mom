@@ -127,12 +127,15 @@ textarea.input{height:auto;padding:10px 14px;resize:vertical}
 /* ---------- estrutura do app ---------- */
 .app{min-height:100vh;min-height:100dvh;display:grid;grid-template-rows:auto auto 1fr}
 .topbar{display:flex;align-items:center;gap:14px;padding-inline:24px;padding-block:14px 10px;max-width:1440px;width:100%;margin:0 auto}
-.shield{position:relative;width:70px;height:58px;flex:none;display:grid;place-items:center;text-align:center}
-.shield::before{content:"";position:absolute;inset:0;background:var(--ink);clip-path:path("M4 4 H66 V28 C66 43 53 52 35 57 C17 52 4 43 4 28 Z")}
-.shield::after{content:"";position:absolute;inset:0;background:var(--land);clip-path:path("M8 8 H62 V28 C62 40 51 47 35 52 C19 47 8 40 8 28 Z")}
-.shield span{position:relative;z-index:1;font-family:"Barlow Condensed",sans-serif;line-height:1;margin-top:-6px}
-.shield b{display:block;font-size:22px;font-weight:800}
-.shield i{display:block;font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.1em;color:var(--muted)}
+.shield{position:relative;width:70px;height:60px;flex:none;font-size:10px}
+.shield svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.shield .sh-out{fill:var(--ink)}
+.shield .sh-in{fill:var(--land)}
+.shield span{position:absolute;left:0;right:0;top:14%;display:grid;justify-items:center;text-align:center;font-family:"Barlow Condensed",sans-serif;line-height:1}
+.shield i{font-style:normal;font-size:.95em;font-weight:700;letter-spacing:.1em;color:var(--muted)}
+.shield b{font-size:2.2em;font-weight:800;margin-top:.1em;color:var(--ink)}
+.shield[data-len="4"] b,.shield[data-len="5"] b{font-size:1.8em;margin-top:.25em}
+.shield[data-len="6"] b,.shield[data-len="7"] b{font-size:1.5em;margin-top:.35em}
 .grow{flex:1}
 .sync{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
 .sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
@@ -420,7 +423,7 @@ td .who b .tag{margin-left:6px;vertical-align:2px}
   .topbar .plate svg{width:30px;height:21px}
   .topbar .plate h1{font-size:19px;white-space:nowrap}
   .plate small{display:none}
-  .shield{width:56px;height:48px;transform:scale(.82);margin:-4px -6px}
+  .shield{width:56px;height:48px;font-size:8px}
   .fields,.grid2{grid-template-columns:1fr}
   .legend{display:none}
   .view-head{margin-bottom:20px}

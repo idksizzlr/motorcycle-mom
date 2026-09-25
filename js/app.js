@@ -827,7 +827,7 @@ function paintAll(){
   const s = stats();
   $("sMunL").textContent = "municípios"; $("sUfL").textContent = "estados de 27"; $("sCapL").textContent = "capitais de 27";
   $("sKmL").textContent = "km² de Brasil"; $("pctL").textContent = "Brasil percorrido"; $("sideH").textContent = "Por estado";
-  animNum($("shieldN"), s.n); animNum($("sMun"), s.n);
+  setShield(s.n); animNum($("sMun"), s.n);
   $("sUf").textContent = s.ufs; $("sCap").textContent = s.caps;
   $("sKm").textContent = s.area >= 1e5 ? fmtN(Math.round(s.area/1000)) + " mil" : fmtN(Math.round(s.area));
   const pct = totalArea ? s.area / totalArea * 100 : 0;
@@ -838,6 +838,7 @@ function paintAll(){
   if (view === "diario") renderDiary();
   if (view === "conquistas") renderBadges();
 }
+function setShield(n){ $("shield").dataset.len = fmtN(n).length; animNum($("shieldN"), n); }
 function animNum(el, to){
   const from = +el.dataset.v || 0; el.dataset.v = to;
   if (from === to || reduced()){ el.textContent = fmtN(to); return; }
@@ -1026,7 +1027,7 @@ async function loadAdmin(show = false){
   admRows = u.data || [];
   heat = new Map((m.data || []).map(r => [r.municipio_id, { pessoas: r.pessoas, nomes: r.nomes || [] }]));
   heatMax = Math.max(1, ...[...heat.values()].map(h => h.pessoas));
-  animNum($("shieldN"), admRows.filter(r => !r.is_admin).length);
+  setShield(admRows.filter(r => !r.is_admin).length);
   resetLegend(); paintAll();
   if (view === "painel") renderPainel();
   if (view === "usuarios") renderUsuarios();
