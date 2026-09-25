@@ -37,30 +37,95 @@ const ICONS = {
   book:'<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
   cal:'<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
   lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  leaf:'<path d="M5 19c0-8 5-14 15-15-1 10-7 15-15 15z"/><path d="M5 19l9-9"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  mountain:'<path d="M3 20 9.5 8l4 7 2.5-4L21 20z"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>',
+  bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  wave:'<path d="M2 10c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 16c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
 };
 const ico = (k, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+
+/* Rotas famosas: cidades pelo nome oficial do IBGE (nome|UF) */
+const ROUTES = {
+  oiachui:     [["Oiapoque","AP"],["Chuí","RS"]],
+  rastro:      [["Lauro Müller","SC"],["Bom Jardim da Serra","SC"]],
+  serraGaucha: [["Gramado","RS"],["Canela","RS"],["Bento Gonçalves","RS"]],
+  estradaReal: [["Paraty","RJ"],["Ouro Preto","MG"],["Diamantina","MG"]],
+  chapadas:    [["Lençóis","BA"],["Alto Paraíso de Goiás","GO"],["Chapada dos Guimarães","MT"]],
+  emocoes:     [["Jijoca de Jericoacoara","CE"],["Parnaíba","PI"],["Barreirinhas","MA"]],
+  transam:     [["Marabá","PA"],["Altamira","PA"],["Itaituba","PA"]],
+  foz:         [["Foz do Iguaçu","PR"]],
+  seixas:      [["João Pessoa","PB"]],
+};
+const UNITS = { longe:" km", span:" km", area:" km²", maxArea:" km²", fullPct:"%", vizPct:"%", anoDias:" dias" };
+
+/* r:1 = lendária */
 const BADGES = [
-  {g:"Cidades", k:"m1",    t:"Primeira parada",       d:"Marque a primeira cidade",           m:"n",     goal:1,    i:"pin"},
-  {g:"Cidades", k:"m10",   t:"Pé na estrada",         d:"10 cidades",                          m:"n",     goal:10,   i:"pin"},
-  {g:"Cidades", k:"m50",   t:"Rodagem",               d:"50 cidades",                          m:"n",     goal:50,   i:"road"},
-  {g:"Cidades", k:"m100",  t:"Centenário",            d:"100 cidades",                         m:"n",     goal:100,  i:"road"},
-  {g:"Cidades", k:"m250",  t:"Motoviagem de verdade", d:"250 cidades",                         m:"n",     goal:250,  i:"star"},
-  {g:"Cidades", k:"m500",  t:"Lenda do asfalto",      d:"500 cidades",                         m:"n",     goal:500,  i:"star"},
-  {g:"Cidades", k:"m1000", t:"Mil cidades",           d:"1.000 municípios",                    m:"n",     goal:1000, i:"crown"},
-  {g:"Estados e regiões", k:"u3",   t:"Divisa cruzada",   d:"Passe por 3 estados",              m:"ufs",   goal:3,  i:"flag"},
-  {g:"Estados e regiões", k:"u10",  t:"Dez bandeiras",    d:"10 estados",                       m:"ufs",   goal:10, i:"flag"},
-  {g:"Estados e regiões", k:"u27",  t:"Brasil inteiro",   d:"Todos os 27 estados",              m:"ufs",   goal:27, i:"crown"},
-  {g:"Estados e regiões", k:"r5",   t:"Cinco regiões",    d:"Norte, Nordeste, Centro-Oeste, Sudeste e Sul", m:"regs", goal:5, i:"compass"},
-  {g:"Estados e regiões", k:"ns",   t:"Do Norte ao Sul",  d:"Uma cidade no Norte e outra no Sul", m:"ns",  goal:2,  i:"compass"},
-  {g:"Estados e regiões", k:"full", t:"Estado fechado",   d:"Todas as cidades de um estado",   m:"fullPct", goal:100, i:"map"},
-  {g:"Capitais", k:"c1",  t:"Na capital",            d:"Visite uma capital",                   m:"caps",  goal:1,  i:"star"},
-  {g:"Capitais", k:"c10", t:"Roteiro das capitais",  d:"10 capitais",                          m:"caps",  goal:10, i:"star"},
-  {g:"Capitais", k:"c27", t:"Todas as capitais",     d:"As 27 capitais do Brasil",             m:"caps",  goal:27, i:"crown"},
-  {g:"Estrada", k:"natal",  t:"Ponto de partida",    d:"Marque a sua cidade de partida",       m:"natal", goal:1,    i:"home"},
-  {g:"Estrada", k:"l500",   t:"Longe de casa",       d:"Uma cidade a 500 km da sua",           m:"longe", goal:500,  i:"road"},
-  {g:"Estrada", k:"l2000",  t:"Do outro lado do mapa", d:"Uma cidade a 2.000 km da sua",       m:"longe", goal:2000, i:"compass"},
-  {g:"Estrada", k:"mem10",  t:"Contadora de histórias", d:"Escreva 10 lembranças",             m:"notas", goal:10,   i:"book", tm:"Contador de histórias"},
-  {g:"Estrada", k:"mes6",   t:"O ano todo na estrada", d:"Viagens em 6 meses diferentes",      m:"meses", goal:6,    i:"cal"},
+  {g:"Cidades", k:"m1",    t:"Primeira parada",       d:"Marque a primeira cidade",       m:"n", goal:1,    i:"pin"},
+  {g:"Cidades", k:"m10",   t:"Pé na estrada",         d:"10 cidades",                      m:"n", goal:10,   i:"pin"},
+  {g:"Cidades", k:"m50",   t:"Rodagem",               d:"50 cidades",                      m:"n", goal:50,   i:"road"},
+  {g:"Cidades", k:"m100",  t:"Centenário",            d:"100 cidades",                     m:"n", goal:100,  i:"road"},
+  {g:"Cidades", k:"m250",  t:"Motoviagem de verdade", d:"250 cidades",                     m:"n", goal:250,  i:"star"},
+  {g:"Cidades", k:"m500",  t:"Asfalto na veia",       d:"500 cidades",                     m:"n", goal:500,  i:"star"},
+  {g:"Cidades", k:"m1000", t:"Mil cidades",           d:"1.000 municípios",                m:"n", goal:1000, i:"crown"},
+  {g:"Cidades", k:"m2000", t:"Duas mil cidades",      d:"2.000 municípios",                m:"n", goal:2000, i:"crown", r:1},
+  {g:"Cidades", k:"m5570", t:"O Brasil inteiro, cidade por cidade", d:"Todos os 5.570 municípios", m:"n", goal:5570, i:"crown", r:1},
+
+  {g:"Estados", k:"u3",     t:"Divisa cruzada",  d:"Passe por 3 estados",              m:"ufs",     goal:3,   i:"flag"},
+  {g:"Estados", k:"u10",    t:"Dez bandeiras",   d:"10 estados",                       m:"ufs",     goal:10,  i:"flag"},
+  {g:"Estados", k:"u27",    t:"Brasil inteiro",  d:"Todos os 27 estados",              m:"ufs",     goal:27,  i:"crown", r:1},
+  {g:"Estados", k:"full50", t:"Meio estado",     d:"Metade das cidades de um estado",  m:"fullPct", goal:50,  i:"map"},
+  {g:"Estados", k:"full",   t:"Estado fechado",  d:"Todas as cidades de um estado",    m:"fullPct", goal:100, i:"map"},
+
+  {g:"Regiões", k:"r5",    t:"Cinco regiões",            d:"Norte, Nordeste, Centro-Oeste, Sudeste e Sul", m:"regs",  goal:5,  i:"compass"},
+  {g:"Regiões", k:"ns",    t:"Do Norte ao Sul",          d:"Uma cidade no Norte e outra no Sul",           m:"ns",    goal:2,  i:"compass"},
+  {g:"Regiões", k:"rN",    t:"Amazônia",                 d:"10 cidades na região Norte",                   m:"regN",  goal:10, i:"leaf"},
+  {g:"Regiões", k:"rNE",   t:"Coração nordestino",       d:"20 cidades no Nordeste",                       m:"regNE", goal:20, i:"sun"},
+  {g:"Regiões", k:"rCO",   t:"Cerrado adentro",          d:"10 cidades no Centro-Oeste",                   m:"regCO", goal:10, i:"sun"},
+  {g:"Regiões", k:"ufS",   t:"Sul inteiro",              d:"Paraná, Santa Catarina e Rio Grande do Sul",   m:"ufS",   goal:3,  i:"flag"},
+  {g:"Regiões", k:"ufSE",  t:"Sudeste completo",         d:"São Paulo, Rio, Minas e Espírito Santo",       m:"ufSE",  goal:4,  i:"flag"},
+  {g:"Regiões", k:"ufCO",  t:"Centro-Oeste completo",    d:"Mato Grosso, Mato Grosso do Sul, Goiás e DF",  m:"ufCO",  goal:4,  i:"flag"},
+  {g:"Regiões", k:"ufNE",  t:"Nordeste de ponta a ponta", d:"Os 9 estados do Nordeste",                   m:"ufNE",  goal:9,  i:"sun"},
+  {g:"Regiões", k:"ufN",   t:"Norte completo",           d:"Os 7 estados do Norte",                        m:"ufN",   goal:7,  i:"leaf"},
+
+  {g:"Capitais", k:"c1",  t:"Na capital",           d:"Visite uma capital",        m:"caps", goal:1,  i:"star"},
+  {g:"Capitais", k:"c5",  t:"Giro pelas capitais",  d:"5 capitais",                m:"caps", goal:5,  i:"star"},
+  {g:"Capitais", k:"c10", t:"Roteiro das capitais", d:"10 capitais",               m:"caps", goal:10, i:"star"},
+  {g:"Capitais", k:"c27", t:"Todas as capitais",    d:"As 27 capitais do Brasil",  m:"caps", goal:27, i:"crown", r:1},
+
+  {g:"Rotas famosas", k:"oiachui",     t:"Do Oiapoque ao Chuí",       d:"Oiapoque (AP) e Chuí (RS), as duas pontas do Brasil",               m:"rota_oiachui",     goal:2, i:"crown", r:1},
+  {g:"Rotas famosas", k:"rastro",      t:"Serra do Rio do Rastro",    d:"Lauro Müller e Bom Jardim da Serra (SC)",                           m:"rota_rastro",      goal:2, i:"mountain"},
+  {g:"Rotas famosas", k:"serraGaucha", t:"Serra Gaúcha",              d:"Gramado, Canela e Bento Gonçalves (RS)",                            m:"rota_serraGaucha", goal:3, i:"mountain"},
+  {g:"Rotas famosas", k:"estradaReal", t:"Estrada Real",              d:"Paraty (RJ), Ouro Preto e Diamantina (MG)",                         m:"rota_estradaReal", goal:3, i:"road"},
+  {g:"Rotas famosas", k:"chapadas",    t:"Três chapadas",             d:"Lençóis (BA), Alto Paraíso de Goiás (GO) e Chapada dos Guimarães (MT)", m:"rota_chapadas", goal:3, i:"mountain"},
+  {g:"Rotas famosas", k:"emocoes",     t:"Rota das Emoções",          d:"Jericoacoara (CE), Parnaíba (PI) e Barreirinhas (MA)",              m:"rota_emocoes",     goal:3, i:"wave"},
+  {g:"Rotas famosas", k:"transam",     t:"Transamazônica",            d:"Marabá, Altamira e Itaituba (PA)",                                  m:"rota_transam",     goal:3, i:"leaf"},
+  {g:"Rotas famosas", k:"foz",         t:"Tríplice fronteira",        d:"Foz do Iguaçu (PR), onde Brasil, Argentina e Paraguai se encontram", m:"rota_foz",        goal:1, i:"globe"},
+  {g:"Rotas famosas", k:"seixas",      t:"Onde o sol nasce primeiro", d:"João Pessoa (PB), a ponta mais a leste das Américas",               m:"rota_seixas",      goal:1, i:"sun"},
+
+  {g:"Geografia", k:"equador", t:"Acima do Equador",        d:"Uma cidade no Hemisfério Norte",                           m:"norteEq", goal:1,       i:"globe"},
+  {g:"Geografia", k:"tropico", t:"Cruzou o Trópico",        d:"Cidades dos dois lados do Trópico de Capricórnio",         m:"tropico", goal:2,       i:"globe"},
+  {g:"Geografia", k:"span",    t:"De ponta a ponta",        d:"3.000 km entre a cidade mais ao norte e a mais ao sul",    m:"span",    goal:3000,    i:"compass"},
+  {g:"Geografia", k:"gigante", t:"Terra a perder de vista", d:"Um município com mais de 50.000 km²",                      m:"maxArea", goal:50000,   i:"map"},
+  {g:"Geografia", k:"bolso",   t:"Cidade de bolso",         d:"Um município com menos de 20 km²",                         m:"tiny",    goal:1,       i:"pin"},
+  {g:"Geografia", k:"a100k",   t:"100 mil km²",             d:"Some 100.000 km² de municípios visitados",                 m:"area",    goal:100000,  i:"map"},
+  {g:"Geografia", k:"a1M",     t:"Um milhão de km²",        d:"1.000.000 km² de Brasil percorridos",                      m:"area",    goal:1000000, i:"crown", r:1},
+
+  {g:"Estrada", k:"natal", t:"Ponto de partida",      d:"Marque a sua cidade de partida",               m:"natal",  goal:1,    i:"home"},
+  {g:"Estrada", k:"viz",   t:"Conhece a vizinhança",  d:"Todas as cidades que fazem divisa com a sua",  m:"vizPct", goal:100,  i:"home"},
+  {g:"Estrada", k:"l500",  t:"Longe de casa",         d:"Uma cidade a 500 km da sua",                   m:"longe",  goal:500,  i:"road"},
+  {g:"Estrada", k:"l2000", t:"Do outro lado do mapa", d:"Uma cidade a 2.000 km da sua",                 m:"longe",  goal:2000, i:"compass"},
+  {g:"Estrada", k:"l3000", t:"Atravessou o Brasil",   d:"Uma cidade a 3.000 km da sua",                 m:"longe",  goal:3000, i:"crown"},
+
+  {g:"Diário", k:"mem10",   t:"Contadora de histórias", tm:"Contador de histórias", d:"Escreva 10 lembranças", m:"notas", goal:10, i:"book"},
+  {g:"Diário", k:"mem50",   t:"Livro de estrada",       d:"Escreva 50 lembranças",                        m:"notas",    goal:50,  i:"book"},
+  {g:"Diário", k:"mes6",    t:"O ano todo na estrada",  d:"Viagens em 6 meses diferentes",                m:"meses",    goal:6,   i:"cal"},
+  {g:"Diário", k:"estacoes",t:"Quatro estações",        d:"Viagens no verão, no outono, no inverno e na primavera", m:"estacoes", goal:4, i:"sun"},
+  {g:"Diário", k:"domingo", t:"Rolê de domingo",        d:"5 cidades marcadas em domingos",               m:"domingos", goal:5,   i:"cal"},
+  {g:"Diário", k:"dia10",   t:"Dia de estrada",         d:"10 cidades no mesmo dia",                      m:"sameDay",  goal:10,  i:"bolt"},
+  {g:"Diário", k:"dia25",   t:"Pé na tábua",            d:"25 cidades no mesmo dia",                      m:"sameDay",  goal:25,  i:"bolt"},
+  {g:"Diário", k:"ano",     t:"Um ano de estrada",      d:"Um ano entre a primeira e a última viagem",    m:"anoDias",  goal:365, i:"cal"},
 ];
 
 /* =====================================================================
@@ -530,7 +595,11 @@ async function enterApp(user, fresh = false){
   renderMe();
   const want = (location.hash || "").slice(1);
   showView(VIEWS[role()].includes(want) ? want : VIEWS[role()][0]);
-  try { await geoReady; initMap(); paintAll(); } catch (e){ $("mapLoading").innerHTML = "<div>O mapa não carregou. Verifique a internet e recarregue a página.</div>"; }
+  try { await geoReady; initMap(); paintAll(); }
+  catch (e){
+    console.error(e);
+    const ml = $("mapLoading"); if (ml) ml.innerHTML = "<div>O mapa não carregou. Verifique a internet e recarregue a página.</div>";
+  }
   if (isAdmin()) loadAdmin();
   flush();
   if (fresh) toast(`Bem-${g3(profile,"vinda","vindo","vindo(a)")}, <b>${esc(profile.nome)}</b>! Toque numa cidade para começar.`, 4200);
@@ -781,24 +850,64 @@ function resetLegend(){
 /* =====================================================================
    Números, níveis e conquistas
    ===================================================================== */
+let routeIds = null, idxById = null;
+function routeIdsOf(){
+  if (routeIds) return routeIds;
+  if (!feats.length) return Object.fromEntries(Object.keys(ROUTES).map(k => [k, []]));
+  const idx = new Map(feats.map(f => [f.properties.n + "|" + f.properties.uf, f.id]));
+  routeIds = {};
+  for (const k in ROUTES) routeIds[k] = ROUTES[k].map(([n, uf]) => idx.get(n + "|" + uf)).filter(Boolean);
+  return routeIds;
+}
+function homeNeighbors(){
+  const id = profile?.cidade_id; if (!id || !topoObj) return [];
+  if (!idxById) idxById = new Map(feats.map((f, i) => [f.id, i]));
+  const i = idxById.get(id); if (i == null) return [];
+  return neighbors()[i].map(j => feats[j].id);
+}
 function stats(){
-  const ufs = new Set(), regs = new Set(), months = new Set(), perUf = {};
-  let caps = 0, area = 0, n = 0, notas = 0, longe = 0;
+  const ufs = new Set(), regs = new Set(), months = new Set(), seasons = new Set(), perUf = {}, perDay = {};
+  const perReg = { 1:0, 2:0, 3:0, 4:0, 5:0 }, ufByReg = { 1:new Set(), 2:new Set(), 3:new Set(), 4:new Set(), 5:new Set() };
+  let caps = 0, area = 0, n = 0, notas = 0, longe = 0, maxArea = 0, tiny = 0, domingos = 0;
+  let latMin = 90, latMax = -90, dMin = "", dMax = "", norteEq = 0, trN = 0, trS = 0;
   const home = profile?.cidade_id && byId.get(profile.cidade_id);
   for (const id in V){
     const f = byId.get(id); if (!f) continue;
-    n++; const uf = f.properties.uf;
-    ufs.add(uf); regs.add(id[0]); if (CAPS.has(id)) caps++; area += f.area;
+    const uf = f.properties.uf, r = id[0], v = V[id], lat = f.c[1];
+    n++; ufs.add(uf); regs.add(r); perReg[r]++; ufByReg[r]?.add(uf);
+    if (CAPS.has(id)) caps++;
+    area += f.area; if (f.area > maxArea) maxArea = f.area; if (f.area < 20) tiny = 1;
     perUf[uf] = (perUf[uf] || 0) + 1;
-    if (V[id].n && V[id].n.trim()) notas++;
-    if (V[id].d) months.add(V[id].d.slice(0,7));
+    if (lat < latMin) latMin = lat; if (lat > latMax) latMax = lat;
+    if (lat > 0) norteEq = 1;
+    if (lat > -23.44) trN = 1; else trS = 1;
+    if (v.n && v.n.trim()) notas++;
+    if (v.d){
+      months.add(v.d.slice(0,7));
+      perDay[v.d] = (perDay[v.d] || 0) + 1;
+      const mo = +v.d.slice(5,7);
+      seasons.add(mo === 12 || mo <= 2 ? "verão" : mo <= 5 ? "outono" : mo <= 8 ? "inverno" : "primavera");
+      if (new Date(v.d + "T12:00").getDay() === 0) domingos++;
+      if (!dMin || v.d < dMin) dMin = v.d;
+      if (!dMax || v.d > dMax) dMax = v.d;
+    }
     if (home) longe = Math.max(longe, d3.geoDistance(home.c, f.c) * 6371);
   }
   let fullPct = 0;
   for (const u in perUf) if (u !== "DF") fullPct = Math.max(fullPct, perUf[u] / ufTotal[u] * 100);
-  return { n, ufs: ufs.size, regs: regs.size, caps, area, perUf, notas, meses: months.size,
+  let vizPct = 0;
+  if (home){ const nb = homeNeighbors(); if (nb.length) vizPct = Math.floor(nb.filter(id => V[id]).length / nb.length * 100); }
+  const out = { n, ufs: ufs.size, regs: regs.size, caps, area: Math.round(area), perUf, notas, meses: months.size,
     longe: Math.round(longe), natal: home && V[profile.cidade_id] ? 1 : 0,
-    ns: (regs.has("1") ? 1 : 0) + (regs.has("4") ? 1 : 0), fullPct: Math.floor(fullPct) };
+    ns: (regs.has("1") ? 1 : 0) + (regs.has("4") ? 1 : 0), fullPct: Math.floor(fullPct),
+    regN: perReg[1], regNE: perReg[2], regCO: perReg[5],
+    ufN: ufByReg[1].size, ufNE: ufByReg[2].size, ufSE: ufByReg[3].size, ufS: ufByReg[4].size, ufCO: ufByReg[5].size,
+    maxArea: Math.round(maxArea), tiny, norteEq, tropico: trN + trS, span: n ? Math.round((latMax - latMin) * 111.2) : 0,
+    vizPct, estacoes: seasons.size, domingos, sameDay: Math.max(0, ...Object.values(perDay)),
+    anoDias: dMin && dMax ? Math.round((new Date(dMax) - new Date(dMin)) / 864e5) : 0 };
+  const rid = routeIdsOf();
+  for (const k in ROUTES) out["rota_" + k] = rid[k].filter(id => V[id]).length;
+  return out;
 }
 const badgeTitle = (b) => b.tm ? g3(profile, b.t, b.tm, b.t) : b.t;
 function earned(){ const s = stats(); return new Set(BADGES.filter(b => s[b.m] >= b.goal).map(b => b.k)); }
@@ -846,12 +955,52 @@ function animNum(el, to){
   const step = (t) => { const k = Math.min(1, (t - t0) / 500); el.textContent = fmtN(Math.round(from + (to - from) * (1 - Math.pow(1-k, 3)))); if (k < 1) requestAnimationFrame(step); };
   requestAnimationFrame(step);
 }
+/* contorno de cada estado (feito uma vez) para a lista "Por estado" */
+let ufShapes = null;
+function ufShape(uf){
+  if (!ufShapes){
+    ufShapes = {};
+    for (const u of Object.keys(UFN)){
+      const f = { type: "Feature", geometry: topojson.merge(topo, topoObj.geometries.filter(g => g.properties.uf === u)) };
+      fixWinding(f);
+      // ilhas minúsculas e distantes (Trindade no ES, Fernando de Noronha em PE) encolheriam o desenho
+      if (f.geometry.type === "MultiPolygon"){
+        const areas = f.geometry.coordinates.map(c => d3.geoArea({ type: "Polygon", coordinates: c }));
+        const max = Math.max(...areas);
+        f.geometry = { type: "MultiPolygon", coordinates: f.geometry.coordinates.filter((c, i) => areas[i] >= max * .01) };
+      }
+      const pr = d3.geoMercator().fitExtent([[3, 3], [41, 41]], f), gp = d3.geoPath(pr);
+      const d = gp(f);
+      // quanto de área o estado tem em cada faixa horizontal (para encher pela área, não pela altura)
+      const R = 4, cv = document.createElement("canvas"); cv.width = cv.height = 44 * R;
+      const cx = cv.getContext("2d"); cx.scale(R, R); cx.fill(new Path2D(d));
+      const px = cx.getImageData(0, 0, 44 * R, 44 * R).data, rows = new Array(44 * R).fill(0);
+      for (let y = 0; y < 44 * R; y++) for (let x = 0; x < 44 * R; x++) if (px[(y * 44 * R + x) * 4 + 3] > 127) rows[y]++;
+      ufShapes[u] = { d, rows, total: rows.reduce((a, b) => a + b, 0) || 1, R, c: gp.centroid(f) };
+    }
+  }
+  return ufShapes[uf];
+}
+function ufIcon(u, pct){
+  const sh = ufShape(u), cid = "ufclip-" + u;
+  // sobe de baixo para cima até cobrir a fração certa da área do estado
+  let fill = 44;
+  if (pct > 0){
+    const goal = sh.total * Math.min(1, Math.max(pct, .04));   // um filete visível mesmo com 1 cidade
+    let acc = 0, y = sh.rows.length - 1;
+    for (; y >= 0; y--){ acc += sh.rows[y]; if (acc >= goal) break; }
+    fill = Math.max(0, y) / sh.R;
+  }
+  return `<svg class="ufi" viewBox="0 0 44 44" aria-hidden="true"><defs><clipPath id="${cid}"><path d="${sh.d}"/></clipPath></defs>
+    <path class="ufi-base" d="${sh.d}"/>${pct > 0 ? `<rect class="ufi-fill" x="0" y="${fill.toFixed(2)}" width="44" height="${(44 - fill).toFixed(2)}" clip-path="url(#${cid})"/>` : ""}
+    <path class="ufi-line" d="${sh.d}"/><text x="${sh.c[0].toFixed(1)}" y="${sh.c[1].toFixed(1)}">${u}</text></svg>`;
+}
 function renderUfList(s){
   if (!feats.length) return;
   const rows = Object.keys(UFN).map(u => ({ u, c: s.perUf[u] || 0, t: ufTotal[u] || 1 }))
     .sort((a,b) => (b.c/b.t - a.c/a.t) || (b.c - a.c) || UFN[a.u].localeCompare(UFN[b.u]));
   $("ufList").innerHTML = (s.n ? "" : `<div class="hint">Toque em qualquer cidade do mapa ou use a busca. Depois é só apertar <b>Passei por aqui!</b></div>`) +
-    rows.map(r => `<button class="row" data-uf="${r.u}"><span class="sg">${r.u}</span><span><div class="nm">${esc(UFN[r.u])}</div><div class="mini"><i style="width:${(r.c/r.t*100).toFixed(2)}%"></i></div></span><span class="ct num">${r.c} / ${fmtN(r.t)}</span></button>`).join("");
+    rows.map(r => `<button class="row" data-uf="${r.u}">${ufIcon(r.u, r.c / r.t)}<span><div class="nm">${esc(UFN[r.u])}</div><div class="mini"><i style="width:${(r.c/r.t*100).toFixed(2)}%"></i></div></span><span class="ct num">${r.c} / ${fmtN(r.t)}</span></button>`).join("");
   $("ufList").querySelectorAll(".row").forEach(b => b.onclick = () => { if (matchMedia("(max-width:900px)").matches) $("wrap").scrollIntoView({ behavior: "smooth" }); flyToUf(b.dataset.uf); });
 }
 
@@ -898,7 +1047,7 @@ function ringSvg(p, size = 156, stroke = 12){
 function renderBadges(){
   const s = stats(), lv = levelOf(s.n);
   const got = BADGES.filter(b => s[b.m] >= b.goal).length;
-  const unitOf = (b) => b.m === "longe" ? " km" : b.m === "fullPct" ? "%" : "";
+  const unitOf = (b) => UNITS[b.m] || "";
   $("levelBox").innerHTML = `<div class="level">
     <div class="ring">${ringSvg(lv.prog)}<div class="in"><div><small>NÍVEL</small><b>${lv.idx+1}</b></div></div></div>
     <div><span class="lk">Seu título na estrada</span><h3>${esc(lv.title)}</h3>
@@ -914,7 +1063,7 @@ function renderBadges(){
     return `<section class="sec"><div class="sec-h"><h4>${esc(g)}</h4><em>${n} de ${list.length}</em></div><div class="medals">${list.map(b => {
       const val = s[b.m], on = val >= b.goal, pr = Math.min(1, val / b.goal), unit = unitOf(b);
       return `<div class="medal ${on ? "on" : ""}"><span class="disc" style="--p:${(pr*100).toFixed(1)}%">${on ? ico(b.i, 32) : ico("lock", 24)}</span>
-        <b>${esc(badgeTitle(b))}</b><span>${esc(b.d)}</span>
+        ${b.r ? '<span class="rare">Lendária</span>' : ""}<b>${esc(badgeTitle(b))}</b><span>${esc(b.d)}</span>
         <span class="prog">${on ? "Conquistada" : b.goal > 1 ? `${fmtN(Math.min(val, b.goal))}${unit} / ${fmtN(b.goal)}${unit}` : "Ainda não"}</span></div>`;
     }).join("")}</div></section>`;
   }).join("") + (profile.cidade_id ? "" : `<p class="muted" style="text-align:center">Dica: escolha sua <b>cidade de partida</b> no Perfil para liberar as conquistas de distância.</p>`);
