@@ -13,7 +13,8 @@ const UFN = {RO:"Rondônia",AC:"Acre",AM:"Amazonas",RR:"Roraima",PA:"Pará",AP:"
 const REG = {1:"Norte",2:"Nordeste",3:"Sudeste",4:"Sul",5:"Centro-Oeste"};
 const CAPS = new Set(["1100205","1200401","1302603","1400100","1501402","1600303","1721000","2111300","2211001","2304400","2408102","2507507","2611606","2704302","2800308","2927408","3106200","3205309","3304557","3550308","4106902","4205407","4314902","5002704","5103403","5208707","5300108"]);
 const GENERO = {mulher:"Mulher",homem:"Homem",outro:"Outro",nao_informado:"Não informado"};
-const PAPEL = {piloto:"Pilota",garupa:"Garupa",os_dois:"Piloto e garupa"};
+const PAPEL = {piloto:"Piloto",garupa:"Garupa",os_dois:"Piloto e garupa"};
+const papelDe = (r) => r?.papel === "garupa" ? "Garupa" : r?.papel === "os_dois" ? g3(r, "Pilota e garupa", "Piloto e garupa", "Piloto(a) e garupa") : g3(r, "Pilota", "Piloto", "Piloto(a)");
 const ESTILO = {estrada:"Asfalto e estrada",serra:"Serra e curvas",praia:"Litoral",terra:"Terra e trilha",de_tudo:"De tudo um pouco"};
 const AV_COLORS = ["#E4572E","#0B6B4C","#2F6FDE","#8B4FD6","#D9A21B","#C8352B","#1E8C93","#B8753F","#5A6BD8","#D0487F"];
 const LEVELS = [
@@ -249,6 +250,7 @@ addEventListener("online", () => flush());
    ===================================================================== */
 function showAuth(){
   $("boot").hidden = true; $("app").hidden = true; $("auth").hidden = false;
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
   document.title = "Por Onde Rodei";
   startHero();
 }
@@ -422,26 +424,51 @@ async function enterApp(user, fresh = false){
     V = nv; saveLocal();
   } else setSync("off");
   $("boot").hidden = true; $("auth").hidden = true; $("app").hidden = false;
-  $("nav").querySelector(".admin-tab").hidden = !profile.is_admin;
+  applyRole();
   renderMe();
   const want = (location.hash || "").slice(1);
-  showView(["mapa","diario","conquistas","ranking","perfil","admin"].includes(want) && (want !== "admin" || profile.is_admin) ? want : "mapa");
+  showView(VIEWS[role()].includes(want) ? want : VIEWS[role()][0]);
   try { await geoReady; initMap(); paintAll(); } catch (e){ $("mapLoading").innerHTML = "<div>O mapa não carregou. Verifique a internet e recarregue a página.</div>"; }
+  if (isAdmin()) loadAdmin();
   flush();
   if (fresh) toast(`Bem-${g3(profile,"vinda","vindo","vindo(a)")}, <b>${esc(profile.nome)}</b>! Toque numa cidade para começar.`, 4200);
 }
 
+/* Quem usa o app e quem administra veem sites diferentes */
+const VIEWS = { user: ["mapa","diario","conquistas","ranking","perfil"], admin: ["painel","usuarios","mapa","ranking","conta"] };
+const isAdmin = () => !!profile?.is_admin;
+const role = () => isAdmin() ? "admin" : "user";
+function applyRole(){
+  document.body.dataset.role = role();
+  $("nav").querySelectorAll("button").forEach(b => b.hidden = !b.dataset.for.split(" ").includes(role()));
+  $("quick").hidden = isAdmin();
+  $("sync").hidden = isAdmin();
+  $("menuProfileTxt").textContent = isAdmin() ? "Minha conta" : "Meu perfil";
+  $("shield").title = isAdmin() ? "Usuários cadastrados" : "Municípios visitados";
+  $("shieldLbl").textContent = isAdmin() ? "PESSOAS" : "CIDADES";
+}
+
 function renderMe(){
   $("meAv").textContent = initial(profile.nome); $("meAv").style.background = avColor(me.id);
-  $("meName").textContent = profile.nome;
+  $("meName").textContent = profile.nome; $("menuName").textContent = profile.nome; $("menuEmail").textContent = me.email;
+  if (isAdmin()){ $("meLevel").textContent = "Administrador"; return; }
   const lv = levelOf(Object.keys(V).length);
   $("meLevel").textContent = `Nível ${lv.idx+1} · ${lv.title}`;
 }
-$("meBtn").onclick = () => showView("perfil");
+
+/* menu do avatar */
+function toggleMenu(open){
+  const m = $("meMenu"); open = open ?? m.hidden;
+  m.hidden = !open; $("meBtn").setAttribute("aria-expanded", open);
+}
+$("meBtn").onclick = (e) => { e.stopPropagation(); toggleMenu(); };
+document.addEventListener("click", (e) => { if (!$("meMenu").hidden && !e.target.closest(".me-wrap")) toggleMenu(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleMenu(false); });
+$("menuProfile").onclick = () => { toggleMenu(false); showView(isAdmin() ? "conta" : "perfil"); };
 
 sb.auth.onAuthStateChange((event, session) => {
   if (event === "PASSWORD_RECOVERY"){ setTimeout(newPasswordModal, 300); }
-  if (event === "SIGNED_OUT"){ entered = false; me = null; profile = null; V = {}; Q = {}; other = null; showAuth(); }
+  if (event === "SIGNED_OUT"){ entered = false; me = null; profile = null; V = {}; Q = {}; other = null; heat = null; admRows = []; closeCard(); $("compare").hidden = true; toggleMenu(false); showAuth(); }
   if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user && !entered) enterApp(session.user);
   if (event === "INITIAL_SESSION" && !session) showAuth();
 });
@@ -461,16 +488,20 @@ function newPasswordModal(){
    ===================================================================== */
 $("nav").querySelectorAll("button").forEach(b => b.onclick = () => showView(b.dataset.v));
 function showView(v){
+  if (!VIEWS[role()].includes(v)) v = VIEWS[role()][0];
   view = v;
   document.querySelectorAll("#app > main.view").forEach(m => m.hidden = m.id !== "v-" + v);
-  $("nav").querySelectorAll("button").forEach(b => b.dataset.v === v ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current"));
+  $("nav").querySelectorAll("button").forEach(b => b.dataset.v === v && !b.hidden ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current"));
   history.replaceState(null, "", "#" + v);
   if (v === "diario") renderDiary();
   if (v === "conquistas") renderBadges();
   if (v === "ranking") loadRanking();
   if (v === "perfil") fillProfile();
-  if (v === "admin") loadAdmin();
+  if (v === "painel") renderPainel();
+  if (v === "usuarios") renderUsuarios();
+  if (v === "conta") renderConta();
   if (v !== "mapa") hideTip();
+  toggleMenu(false);
   window.scrollTo({ top: 0 });
 }
 
@@ -516,7 +547,7 @@ function initMap(){
 
   gMun.on("click", (e) => {
     const f = e.target.__data__; if (!f) return;
-    if (other && !quick){ select(f.id); return; }
+    if (isAdmin() || (other && !quick)){ select(f.id); return; }
     if (quick) toggle(f.id, e.clientX, e.clientY); else select(f.id);
   });
   gMun.on("pointermove", (e) => {
@@ -577,6 +608,15 @@ function refreshCard(){
   if (!selId){ c.hidden = true; return; }
   const f = byId.get(selId), p = f.properties, v = V[selId];
   const theirs = other?.set.has(selId);
+  if (isAdmin()){
+    const h = heat?.get(selId);
+    c.innerHTML = `<button class="x" id="cx" aria-label="Fechar">✕</button>
+      <div><h3>${esc(p.n)}</h3><div class="meta">${esc(UFN[p.uf])} · Região ${REG[selId[0]]}${CAPS.has(selId) ? " · Capital" : ""} · ${fmtN(Math.round(f.area))} km²</div></div>
+      ${other ? `<div class="meta" style="color:var(--other);font-weight:700">${theirs ? `${esc(other.nome)} passou por aqui` : `${esc(other.nome)} ainda não passou por aqui`}</div>`
+        : h ? `<div><b style="font-size:18px">${h.pessoas} ${h.pessoas === 1 ? "pessoa passou" : "pessoas passaram"} por aqui</b><div class="names" style="margin-top:8px">${h.nomes.map(n => `<span>${esc(n)}</span>`).join("")}${h.pessoas > h.nomes.length ? `<span>+${h.pessoas - h.nomes.length}</span>` : ""}</div></div>`
+        : `<div class="meta">Ninguém marcou esta cidade ainda.</div>`}`;
+    c.hidden = false; $("cx").onclick = closeCard; return;
+  }
   c.innerHTML = `
     <button class="x" id="cx" aria-label="Fechar">✕</button>
     <div><h3>${esc(p.n)}</h3><div class="meta">${esc(UFN[p.uf])} · Região ${REG[selId[0]]}${CAPS.has(selId) ? " · Capital" : ""} · ${fmtN(Math.round(f.area))} km²${selId === profile.cidade_id ? " · Sua cidade" : ""}</div>
@@ -619,17 +659,21 @@ async function compareWith(id, nome){
   const { data, error } = await sb.rpc("mapa_publico", { p_user: id });
   if (error){ toast("Não foi possível abrir esse mapa."); return; }
   other = { id, nome, set: new Set(data.map(r => r.municipio_id)) };
-  showView("mapa"); paintAll();
+  showView("mapa"); closeCard(); paintAll();
   let both = 0; for (const x of other.set) if (V[x]) both++;
-  $("compareTxt").textContent = `Mapa de ${nome}: ${fmtN(other.set.size)} cidades · ${fmtN(both)} em comum com você`;
+  $("compareTxt").textContent = isAdmin() ? `Mapa de ${nome}: ${fmtN(other.set.size)} cidades` : `Mapa de ${nome}: ${fmtN(other.set.size)} cidades · ${fmtN(both)} em comum com você`;
   $("compare").hidden = false;
-  $("legend").innerHTML = `<span><i class="sw v"></i>Só você</span><span><i class="sw o"></i>Só ${esc(nome.split(" ")[0])}</span><span><i class="sw b"></i>Os dois</span>`;
+  $("legend").innerHTML = isAdmin() ? `<span><i class="sw o"></i>Cidades de ${esc(nome.split(" ")[0])}</span>` : `<span><i class="sw v"></i>Só você</span><span><i class="sw o"></i>Só ${esc(nome.split(" ")[0])}</span><span><i class="sw b"></i>Os dois</span>`;
   svg?.transition().duration(600).call(zoom.transform, d3.zoomIdentity);
 }
 function endCompare(){
   other = null; $("compare").hidden = true;
-  $("legend").innerHTML = `<span><i class="sw v"></i>Já passei</span><span><i class="sw"></i>Ainda não</span>`;
-  paintAll(); refreshCard();
+  resetLegend(); paintAll(); refreshCard();
+}
+function resetLegend(){
+  $("legend").innerHTML = isAdmin()
+    ? (heatMax > 1 ? `<span>1 pessoa</span><i class="heatbar"></i><span>${fmtN(heatMax)} pessoas</span>` : `<span><i class="sw" style="background:${heatColor(1)};border-color:${heatColor(1)}"></i>Alguém já passou por aqui</span>`)
+    : `<span><i class="sw v"></i>Já passei</span><span><i class="sw"></i>Ainda não</span>`;
 }
 
 /* =====================================================================
@@ -663,16 +707,24 @@ function levelOf(n){
     nextTitle: next ? g3(profile, next.f, next.m, next.x) : null };
 }
 
+function heatColor(c){
+  const t = heatMax > 1 ? Math.log(c) / Math.log(heatMax) : 1;
+  return d3.interpolateRgb("#F7C9A6", "#8E2412")(.12 + .88 * t);
+}
 function paintAll(){
+  if (isAdmin()) return paintAdminMap();
   if (mapReady){
     for (const [id, el] of pathEl){
       const on = !!V[id], o = !!other?.set.has(id);
       if (el.classList.contains("v") !== on) el.classList.toggle("v", on);
       if (el.classList.contains("o") !== o) el.classList.toggle("o", o);
+      if (el.style.fill){ el.style.fill = ""; el.style.stroke = ""; }
     }
     drawHome();
   }
   const s = stats();
+  $("sMunL").textContent = "municípios"; $("sUfL").textContent = "estados de 27"; $("sCapL").textContent = "capitais de 27";
+  $("sKmL").textContent = "km² de Brasil"; $("pctL").textContent = "Brasil percorrido"; $("sideH").textContent = "Por estado";
   animNum($("shieldN"), s.n); animNum($("sMun"), s.n);
   $("sUf").textContent = s.ufs; $("sCap").textContent = s.caps;
   $("sKm").textContent = s.area >= 1e5 ? fmtN(Math.round(s.area/1000)) + " mil" : fmtN(Math.round(s.area));
@@ -704,7 +756,16 @@ function renderUfList(s){
 function renderDiary(){
   const list = Object.entries(V).filter(([id]) => byId.has(id))
     .sort((a,b) => (b[1].d || "").localeCompare(a[1].d || "") || byId.get(a[0]).properties.n.localeCompare(byId.get(b[0]).properties.n));
-  $("diarySub").textContent = list.length ? `${fmtN(list.length)} cidades · ${list.filter(x => x[1].n).length} com lembrança` : "Cada cidade marcada vira uma página.";
+  const notas = list.filter(x => x[1].n && x[1].n.trim()).length;
+  const meses = new Set(list.filter(x => x[1].d).map(x => x[1].d.slice(0,7))).size;
+  const primeira = list.filter(x => x[1].d).map(x => x[1].d).sort()[0];
+  $("diarySub").textContent = list.length ? "Toque numa viagem para vê-la no mapa." : "Cada cidade marcada vira uma página.";
+  $("diarySum").hidden = !list.length;
+  $("diarySum").innerHTML = `
+    <div><b class="num">${fmtN(list.length)}</b><span>cidades</span></div>
+    <div><b class="num">${fmtN(notas)}</b><span>lembranças</span></div>
+    <div><b class="num">${fmtN(meses)}</b><span>${meses === 1 ? "mês na estrada" : "meses na estrada"}</span></div>
+    <div><b class="num">${primeira ? fmtDate(primeira).slice(3) : "—"}</b><span>primeira viagem</span></div>`;
   if (!list.length){ $("diary").innerHTML = `<div class="empty">Seu diário começa na primeira cidade marcada.<br>Cada lugar ganha data e uma lembrança.</div>`; return; }
   const groups = new Map();
   for (const it of list){
@@ -713,36 +774,47 @@ function renderDiary(){
   }
   let html = "";
   for (const [m, items] of groups){
-    html += `<div class="month">${esc(m.charAt(0).toUpperCase() + m.slice(1))} <small>${items.length} ${items.length === 1 ? "cidade" : "cidades"}</small></div>`;
+    html += `<div class="month"><span>${esc(m.charAt(0).toUpperCase() + m.slice(1))}<small>${items.length} ${items.length === 1 ? "cidade" : "cidades"}</small></span></div><div class="trips">`;
     for (const [id, v] of items.slice(0, 300)){
       const p = byId.get(id).properties;
-      html += `<button class="trip" data-id="${id}"><span class="pin"></span><span><b>${esc(p.n)}</b> <span class="muted">· ${esc(UFN[p.uf])}</span>${v.n ? `<p>${esc(v.n)}</p>` : ""}</span><small class="num">${fmtDate(v.d)}</small></button>`;
+      html += `<button class="trip" data-id="${id}"><span class="pin">${ico("pin", 20)}</span><span><b>${esc(p.n)}</b><span class="uf">${p.uf}</span>${v.n ? `<p>“${esc(v.n)}”</p>` : ""}</span><small class="num">${fmtDate(v.d) || "sem data"}</small></button>`;
     }
+    html += "</div>";
   }
   $("diary").innerHTML = html;
   $("diary").querySelectorAll(".trip").forEach(b => b.onclick = () => { showView("mapa"); select(b.dataset.id); setTimeout(() => flyTo(byId.get(b.dataset.id), 25), 60); });
 }
 
 /* ---------- conquistas ---------- */
+function ringSvg(p, size = 156, stroke = 12){
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="${stroke}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--road)" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - Math.max(.02, p))}"/></svg>`;
+}
 function renderBadges(){
   const s = stats(), lv = levelOf(s.n);
   const got = BADGES.filter(b => s[b.m] >= b.goal).length;
+  const unitOf = (b) => b.m === "longe" ? " km" : b.m === "fullPct" ? "%" : "";
   $("levelBox").innerHTML = `<div class="level">
-    <div class="lvn"><div><small>NÍVEL</small><b>${lv.idx+1}</b></div></div>
-    <div><h3>${esc(lv.title)}</h3>
-      <p>${lv.next ? `Faltam <b>${fmtN(lv.next.min - s.n)}</b> cidades para virar <b>${esc(lv.nextTitle)}</b>` : "Você chegou ao topo da estrada. Respeito!"} · ${got} de ${BADGES.length} conquistas</p>
-      <div class="bar"><i style="width:${(lv.prog*100).toFixed(1)}%"></i></div></div></div>`;
-  let html = "", g = "";
-  for (const b of BADGES){
-    if (b.g !== g){ if (g) html += "</div>"; g = b.g; html += `<div class="bgroup">${esc(g)}</div><div class="badges">`; }
-    const val = s[b.m], on = val >= b.goal, pr = Math.min(1, val / b.goal);
-    const unit = b.m === "longe" ? " km" : b.m === "fullPct" ? "%" : "";
-    html += `<div class="badge ${on ? "on" : ""}"><span class="ic">${on ? ico(b.i) : ico("lock", 18)}</span><b>${esc(badgeTitle(b))}</b><span>${esc(b.d)}</span>
-      ${b.goal > 1 ? `<div class="bar"><i style="width:${(pr*100).toFixed(1)}%"></i></div><span class="prog num">${fmtN(Math.min(val, b.goal))}${unit} / ${fmtN(b.goal)}${unit}</span>` : `<span class="prog">${on ? "Conquistada" : "Ainda não"}</span>`}</div>`;
-  }
-  $("badgeBox").innerHTML = html + "</div>";
-  if (!profile.cidade_id)
-    $("badgeBox").insertAdjacentHTML("beforeend", `<div class="hint" style="margin-top:16px">Dica: escolha sua <b>cidade de partida</b> no Perfil para liberar as conquistas de distância.</div>`);
+    <div class="ring">${ringSvg(lv.prog)}<div class="in"><div><small>NÍVEL</small><b>${lv.idx+1}</b></div></div></div>
+    <div><span class="lk">Seu título na estrada</span><h3>${esc(lv.title)}</h3>
+      <p>${lv.next ? `Faltam <b>${fmtN(lv.next.min - s.n)}</b> cidades para virar <b>${esc(lv.nextTitle)}</b>.` : "Você chegou ao topo da estrada. Respeito!"}</p>
+      <div class="lstats"><span><b class="num">${fmtN(s.n)}</b>cidades</span><span><b class="num">${got}/${BADGES.length}</b>conquistas</span><span><b class="num">${s.ufs}/27</b>estados</span></div></div></div>`;
+  // as três mais perto de sair
+  const near = BADGES.filter(b => s[b.m] < b.goal && b.goal > 1).map(b => ({ b, p: s[b.m] / b.goal })).sort((a,b) => b.p - a.p).slice(0, 3);
+  $("nearBox").innerHTML = near.length ? `<section class="sec"><div class="sec-h"><h4>Quase lá</h4></div><div class="near">${near.map(({b,p}) => `
+    <div class="nearc"><span class="mini-disc">${ico(b.i, 24)}</span><span><b>${esc(badgeTitle(b))}</b><span>${fmtN(s[b.m])}${unitOf(b)} de ${fmtN(b.goal)}${unitOf(b)} · ${esc(b.d)}</span><div class="bar"><i style="width:${(p*100).toFixed(1)}%"></i></div></span></div>`).join("")}</div></section>` : "";
+  const groups = [...new Set(BADGES.map(b => b.g))];
+  $("badgeBox").innerHTML = groups.map(g => {
+    const list = BADGES.filter(b => b.g === g), n = list.filter(b => s[b.m] >= b.goal).length;
+    return `<section class="sec"><div class="sec-h"><h4>${esc(g)}</h4><em>${n} de ${list.length}</em></div><div class="medals">${list.map(b => {
+      const val = s[b.m], on = val >= b.goal, pr = Math.min(1, val / b.goal), unit = unitOf(b);
+      return `<div class="medal ${on ? "on" : ""}"><span class="disc" style="--p:${(pr*100).toFixed(1)}%">${on ? ico(b.i, 32) : ico("lock", 24)}</span>
+        <b>${esc(badgeTitle(b))}</b><span>${esc(b.d)}</span>
+        <span class="prog">${on ? "Conquistada" : b.goal > 1 ? `${fmtN(Math.min(val, b.goal))}${unit} / ${fmtN(b.goal)}${unit}` : "Ainda não"}</span></div>`;
+    }).join("")}</div></section>`;
+  }).join("") + (profile.cidade_id ? "" : `<p class="muted" style="text-align:center">Dica: escolha sua <b>cidade de partida</b> no Perfil para liberar as conquistas de distância.</p>`);
 }
 
 /* ---------- ranking ---------- */
@@ -767,9 +839,9 @@ async function loadRanking(){
   box.innerHTML = `<div class="podium">${pod(top[1],2)}${pod(top[0],1)}${pod(top[2],3)}</div>
     <div class="rlist">${rest.map(r => `<button class="ritem ${r.eh_voce ? "me" : ""}" data-id="${r.user_id}" data-nome="${esc(r.nome)}">
       <span class="pos">${r.posicao}º</span>${avatar(r.user_id, r.nome)}
-      <span><b>${esc(r.nome)}${r.eh_voce ? " (você)" : ""}</b><small>${esc(PAPEL[r.papel] || "")}${r.moto ? " · " + esc(r.moto) : ""} · ${sub(r)}</small></span>
+      <span><b>${esc(r.nome)}${r.eh_voce ? " (você)" : ""}</b><small>${esc(papelDe(r))}${r.moto ? " · " + esc(r.moto) : ""} · ${sub(r)}</small></span>
       <span class="sc num">${fmtN(r.cidades)}<small>cidades</small></span></button>`).join("")}</div>
-    ${data.some(r => r.eh_voce) ? "" : `<p class="muted" style="text-align:center;margin-top:16px">Você ainda não aparece aqui${profile.aparece_ranking ? ": marque cidades para entrar no ranking." : " porque escolheu ficar fora do ranking (dá para mudar no Perfil)."}</p>`}`;
+    ${isAdmin() || data.some(r => r.eh_voce) ? "" : `<p class="muted" style="text-align:center;margin-top:16px">Você ainda não aparece aqui${profile.aparece_ranking ? ": marque cidades para entrar no ranking." : " porque escolheu ficar fora do ranking (dá para mudar no Perfil)."}</p>`}`;
   box.querySelectorAll("[data-id]").forEach(b => b.onclick = () => compareWith(b.dataset.id, b.dataset.nome));
 }
 
@@ -779,8 +851,17 @@ function fillProfile(){
   $("pfNome").value = profile.nome; $("pfGenero").value = profile.genero; $("pfPapel").value = profile.papel;
   $("pfEstilo").value = profile.estilo; $("pfMoto").value = profile.moto || ""; $("pfDesde").value = profile.pilota_desde || "";
   $("pfRanking").checked = profile.aparece_ranking; pfCity.set(profile.cidade_id);
-  $("profSub").textContent = `${me.email} · conta criada em ${new Date(profile.criado_em || Date.now()).toLocaleDateString("pt-BR")}`;
   $("pfErr").textContent = ""; $("pwErr").textContent = "";
+  renderPassport();
+}
+function renderPassport(){
+  const s = stats(), lv = levelOf(s.n), got = BADGES.filter(b => s[b.m] >= b.goal).length;
+  const facts = [papelDe(profile), profile.moto, ESTILO[profile.estilo], profile.pilota_desde ? `Na estrada desde ${profile.pilota_desde}` : "", profile.cidade_id ? `Parte de ${cityLabel(profile.cidade_id)}` : ""].filter(Boolean);
+  $("passport").innerHTML = `${avatar(me.id, profile.nome)}
+    <div><span class="kicker">Nível ${lv.idx+1} · ${esc(lv.title)}</span><h2>${esc(profile.nome)}</h2>
+      <div class="meta">${esc(me.email)} · na estrada com a gente desde ${new Date(profile.criado_em || Date.now()).toLocaleDateString("pt-BR")}</div>
+      <div class="facts">${facts.map(f => `<span>${esc(f)}</span>`).join("")}</div></div>
+    <div class="nums"><div><b class="num">${fmtN(s.n)}</b><span>cidades</span></div><div><b class="num">${s.ufs}</b><span>estados</span></div><div><b class="num">${got}</b><span>conquistas</span></div></div>`;
 }
 $("profForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -793,7 +874,7 @@ $("profForm").addEventListener("submit", async (e) => {
   if (upd.nome.length < 2){ $("pfErr").textContent = "O nome precisa ter pelo menos 2 letras."; return; }
   const { data, error } = await sb.from("profiles").update(upd).eq("id", me.id).select().single();
   if (error){ $("pfErr").textContent = authMsg(error); return; }
-  profile = data; renderMe(); paintAll(); toast("Perfil salvo.");
+  profile = data; renderMe(); paintAll(); renderPassport(); toast("Perfil salvo.");
 });
 $("pwForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -832,36 +913,113 @@ $("impFile").onchange = async (e) => {
 };
 $("expBtn").onclick = () => download(`por-onde-rodei-${today()}.json`, JSON.stringify({ app: "por-onde-rodei", salvoEm: new Date().toISOString(), v: V }, null, 1));
 
-/* ---------- admin ---------- */
-let admRows = [];
-$("admReload").onclick = () => loadAdmin();
-$("admQ").addEventListener("input", () => renderAdmin());
-async function loadAdmin(){
-  if (!profile?.is_admin) return;
-  $("admRows").innerHTML = `<tr><td colspan="7" class="muted">Carregando…</td></tr>`;
-  const { data, error } = await sb.rpc("admin_usuarios");
-  if (error){ $("admRows").innerHTML = `<tr><td colspan="7" class="err">${esc(error.message)}</td></tr>`; return; }
-  admRows = data; renderAdmin();
+/* ---------- administração ---------- */
+let admRows = [], heat = null, heatMax = 1;
+$("admReload").onclick = () => loadAdmin(true);
+$("admQ").addEventListener("input", () => renderUsuarios());
+async function loadAdmin(show = false){
+  if (!isAdmin()) return;
+  const [u, m] = await Promise.all([sb.rpc("admin_usuarios"), sb.rpc("admin_mapa_geral")]);
+  if (u.error){ toast("Não consegui carregar os dados do painel."); return; }
+  admRows = u.data || [];
+  heat = new Map((m.data || []).map(r => [r.municipio_id, { pessoas: r.pessoas, nomes: r.nomes || [] }]));
+  heatMax = Math.max(1, ...[...heat.values()].map(h => h.pessoas));
+  animNum($("shieldN"), admRows.filter(r => !r.is_admin).length);
+  resetLegend(); paintAll();
+  if (view === "painel") renderPainel();
+  if (view === "usuarios") renderUsuarios();
+  if (show) toast("Dados atualizados.");
 }
-function renderAdmin(){
-  const week = Date.now() - 7*864e5;
-  const tot = admRows.length, marks = admRows.reduce((a,r) => a + r.cidades, 0);
-  const novos = admRows.filter(r => new Date(r.criado_em) > week).length;
-  const ativos = admRows.filter(r => r.ultimo_acesso && new Date(r.ultimo_acesso) > week).length;
-  const gc = { mulher:0, homem:0, outro:0, nao_informado:0 }; admRows.forEach(r => gc[r.genero]++);
-  const gcol = { mulher:"var(--accent)", homem:"var(--other)", outro:"var(--both)", nao_informado:"var(--silver)" };
+
+/* mapa geral: quantas pessoas passaram por cada cidade */
+function paintAdminMap(){
+  if (mapReady){
+    for (const [id, el] of pathEl){
+      el.classList.remove("v");
+      const o = !!other?.set.has(id);
+      if (el.classList.contains("o") !== o) el.classList.toggle("o", o);
+      const h = !other && heat?.get(id);
+      const col = h ? heatColor(h.pessoas) : "";
+      if (el.style.fill !== col){ el.style.fill = col; el.style.stroke = col; }
+    }
+    homePath?.attr("d", null);
+  }
+  const ids = heat ? [...heat.keys()].filter(id => byId.has(id)) : [];
+  const ufs = new Set(ids.map(id => byId.get(id).properties.uf));
+  const area = ids.reduce((a, id) => a + byId.get(id).area, 0);
+  const marcas = heat ? [...heat.values()].reduce((a, h) => a + h.pessoas, 0) : 0;
+  $("sMun").textContent = fmtN(ids.length); $("sMunL").textContent = "cidades com visitas";
+  $("sUf").textContent = ufs.size; $("sUfL").textContent = "estados de 27";
+  $("sCap").textContent = ids.filter(id => CAPS.has(id)).length; $("sCapL").textContent = "capitais de 27";
+  $("sKm").textContent = fmtN(marcas); $("sKmL").textContent = "marcações no total";
+  const pct = totalArea ? area / totalArea * 100 : 0;
+  $("pctL").textContent = "Brasil coberto pela turma";
+  $("pct").textContent = (pct < 1 && pct > 0 ? pct.toFixed(2) : pct.toFixed(1)).replace(".", ",") + "%";
+  $("pctBar").style.width = Math.max(pct, ids.length ? .8 : 0) + "%";
+  $("sideH").textContent = "Cidades mais visitadas";
+  const top = ids.sort((a,b) => heat.get(b).pessoas - heat.get(a).pessoas || byId.get(a).properties.n.localeCompare(byId.get(b).properties.n)).slice(0, 40);
+  $("ufList").innerHTML = top.length ? top.map((id, i) => { const p = byId.get(id).properties, h = heat.get(id);
+    return `<button class="row" data-id="${id}"><span class="sg">${p.uf}</span><span><div class="nm">${esc(p.n)}</div><div class="mini"><i style="width:${(h.pessoas/heatMax*100).toFixed(1)}%;background:${heatColor(h.pessoas)}"></i></div></span><span class="ct num">${h.pessoas} ${h.pessoas === 1 ? "pessoa" : "pessoas"}</span></button>`; }).join("")
+    : `<div class="hint">Assim que alguém marcar uma cidade, ela aparece aqui.</div>`;
+  $("ufList").querySelectorAll(".row").forEach(b => b.onclick = () => { if (matchMedia("(max-width:900px)").matches) $("wrap").scrollIntoView({ behavior: "smooth" }); select(b.dataset.id); flyTo(byId.get(b.dataset.id), 25); });
+}
+
+/* visão geral */
+function renderPainel(){
+  const day = 864e5, now = Date.now();
+  const users = admRows.filter(r => !r.is_admin), admins = admRows.length - users.length;
+  const tot = users.length, marks = users.reduce((a,r) => a + r.cidades, 0);
+  const novos = users.filter(r => now - new Date(r.criado_em) < 7*day).length;
+  const ativos = users.filter(r => r.ultimo_acesso && now - new Date(r.ultimo_acesso) < 7*day).length;
+  const usam = users.filter(r => r.cidades > 0).length;
   $("admKpis").innerHTML = `
-    <div class="kpi"><b class="num">${fmtN(tot)}</b><span>contas</span></div>
-    <div class="kpi"><b class="num">${fmtN(marks)}</b><span>cidades marcadas no total</span></div>
-    <div class="kpi"><b class="num">${fmtN(novos)}</b><span>contas novas em 7 dias</span></div>
+    <div class="kpi"><b class="num">${fmtN(tot)}</b><span>${tot === 1 ? "usuário" : "usuários"}</span>${novos ? `<em>+${novos} nesta semana</em>` : `<em style="color:var(--muted)">${admins} ${admins === 1 ? "administrador" : "administradores"}</em>`}</div>
     <div class="kpi"><b class="num">${fmtN(ativos)}</b><span>entraram nos últimos 7 dias</span></div>
-    <div class="kpi"><span>Quem usa</span><div class="gbar">${Object.keys(gc).map(k => gc[k] ? `<i style="width:${gc[k]/Math.max(tot,1)*100}%;background:${gcol[k]}" title="${GENERO[k]}: ${gc[k]}"></i>` : "").join("")}</div>
-      <span style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px">${Object.keys(gc).filter(k => gc[k]).map(k => `<span><i class="dot" style="display:inline-block;background:${gcol[k]};border-color:${gcol[k]}"></i> ${GENERO[k]} ${gc[k]}</span>`).join("")}</span></div>`;
+    <div class="kpi"><b class="num">${fmtN(marks)}</b><span>cidades marcadas</span></div>
+    <div class="kpi"><b class="num">${tot ? Math.round(usam / tot * 100) : 0}%</b><span>já marcaram alguma cidade</span></div>`;
+  // cadastros nos últimos 30 dias
+  const days = [...Array(30)].map((_, i) => { const d = new Date(now - (29 - i) * day); return d.toISOString().slice(0,10); });
+  const perDay = Object.fromEntries(days.map(d => [d, 0]));
+  users.forEach(r => { const d = String(r.criado_em).slice(0,10); if (d in perDay) perDay[d]++; });
+  const maxD = Math.max(1, ...Object.values(perDay)), CW = 600, CH = 170, bw = CW / 30;
+  const chart = `<svg viewBox="0 0 ${CW} ${CH + 22}" role="img" aria-label="Contas novas por dia nos últimos 30 dias">
+    <line x1="0" x2="${CW}" y1="${CH}" y2="${CH}" stroke="var(--line)"/>
+    ${[.25,.5,.75,1].map(t => `<line x1="0" x2="${CW}" y1="${CH - t*(CH-16)}" y2="${CH - t*(CH-16)}" stroke="var(--line)" stroke-dasharray="3 5"/>`).join("")}
+    ${days.map((d, i) => { const h = perDay[d] / maxD * (CH - 16); return perDay[d] === 0 ? `<rect x="${i*bw + 3}" y="${CH - 3}" width="${bw - 6}" height="3" rx="1.5" fill="var(--line)"><title>${fmtDate(d)}: 0</title></rect>` : `<rect x="${i*bw + 3}" y="${CH - h}" width="${bw - 6}" height="${Math.max(h, 2)}" rx="3" fill="var(--accent)"><title>${fmtDate(d)}: ${perDay[d]}</title></rect>${perDay[d] ? `<text x="${i*bw + bw/2}" y="${CH - h - 4}" text-anchor="middle">${perDay[d]}</text>` : ""}`; }).join("")}
+    <text x="0" y="${CH + 16}">${fmtDate(days[0]).slice(0,5)}</text><text x="${CW}" y="${CH + 16}" text-anchor="end">hoje</text></svg>`;
+  const split = (key, labels, colors) => {
+    const c = {}; users.forEach(r => c[r[key]] = (c[r[key]] || 0) + 1);
+    const ks = Object.keys(labels).filter(k => c[k]);
+    return `<div class="split"><div class="gbar">${ks.map(k => `<i style="width:${c[k]/Math.max(tot,1)*100}%;background:${colors[k]}" title="${labels[k]}: ${c[k]}"></i>`).join("")}</div>
+      <div class="lbls">${ks.map(k => `<span><i class="dot" style="background:${colors[k]};border-color:${colors[k]}"></i>${labels[k]} <b>${c[k]}</b></span>`).join("") || '<span class="muted">Sem dados ainda</span>'}</div></div>`;
+  };
+  const gcol = { mulher:"var(--accent)", homem:"var(--other)", outro:"var(--both)", nao_informado:"var(--silver)" };
+  const pcol = { piloto:"var(--sign)", garupa:"var(--road)", os_dois:"var(--both)" };
+  const topUsers = [...users].sort((a,b) => b.cidades - a.cidades).slice(0, 6);
+  const topCities = heat ? [...heat.entries()].filter(([id]) => byId.has(id)).sort((a,b) => b[1].pessoas - a[1].pessoas).slice(0, 6) : [];
+  const recentes = [...users].sort((a,b) => new Date(b.criado_em) - new Date(a.criado_em)).slice(0, 6);
+  $("dash").innerHTML = `
+    <div class="panel wide chart"><div class="panel-h"><h3>Contas novas</h3><p class="muted">Últimos 30 dias</p></div>${chart}</div>
+    <div class="panel narrow"><div class="panel-h"><h3>Quem usa</h3></div>
+      <div class="stack"><div><div class="field"><span>Gênero</span></div>${split("genero", GENERO, gcol)}</div>
+      <div><div class="field"><span>Na moto</span></div>${split("papel", { piloto:"Pilotam", garupa:"Garupa", os_dois:"Os dois" }, pcol)}</div></div></div>
+    <div class="panel narrow"><div class="panel-h"><h3>Quem mais roda</h3></div>
+      <ol class="toplist">${topUsers.map((r,i) => `<li data-uid="${r.id}"><span class="n">${i+1}</span><span><b>${esc(r.nome)}</b><br><small>${esc(papelDe(r))}${r.moto ? " · " + esc(r.moto) : ""}</small></span><span class="v num">${fmtN(r.cidades)}</span></li>`).join("") || '<li class="muted">Ninguém ainda</li>'}</ol></div>
+    <div class="panel narrow"><div class="panel-h"><h3>Cidades favoritas</h3></div>
+      <ol class="toplist">${topCities.map(([id,h],i) => `<li data-cid="${id}"><span class="n">${i+1}</span><span><b>${esc(byId.get(id).properties.n)}</b><br><small>${esc(UFN[byId.get(id).properties.uf])}</small></span><span class="v num">${h.pessoas}</span></li>`).join("") || '<li class="muted">Nenhuma cidade marcada ainda</li>'}</ol></div>
+    <div class="panel narrow"><div class="panel-h"><h3>Chegaram agora</h3></div>
+      <ol class="toplist">${recentes.map(r => `<li data-uid="${r.id}"><span>${avatar(r.id, r.nome)}</span><span><b>${esc(r.nome)}</b><br><small>${ago(r.criado_em).replace("agora há pouco","hoje")}</small></span><span class="v num">${fmtN(r.cidades)}</span></li>`).join("") || '<li class="muted">Ninguém ainda</li>'}</ol></div>`;
+  $("dash").querySelectorAll("[data-uid]").forEach(li => li.onclick = () => { const r = admRows.find(x => x.id === li.dataset.uid); if (r) compareWith(r.id, r.nome); });
+  $("dash").querySelectorAll("[data-cid]").forEach(li => li.onclick = () => { showView("mapa"); select(li.dataset.cid); setTimeout(() => flyTo(byId.get(li.dataset.cid), 25), 60); });
+}
+
+/* lista de usuários */
+function renderUsuarios(){
   const q = norm($("admQ").value || "");
   const rows = admRows.filter(r => !q || norm(r.nome).includes(q) || norm(r.email || "").includes(q));
   $("admRows").innerHTML = rows.map(r => `<tr>
-    <td><div class="who">${avatar(r.id, r.nome)}<span><b>${esc(r.nome)}</b><small>${esc(r.email)}</small></span></div></td>
-    <td>${esc(GENERO[r.genero])} · ${esc(PAPEL[r.papel])}${r.moto ? `<br><small class="muted">${esc(r.moto)}</small>` : ""}<br>${r.is_admin ? '<span class="tag adm">admin</span> ' : ""}${r.aparece_ranking ? "" : '<span class="tag hid">fora do ranking</span>'}</td>
+    <td><div class="who">${avatar(r.id, r.nome)}<span><b>${esc(r.nome)}${r.is_admin ? ' <span class="tag adm">admin</span>' : !r.aparece_ranking ? ' <span class="tag hid">fora do ranking</span>' : ""}</b><small>${esc(r.email)}</small></span></div></td>
+    <td class="perf">${r.is_admin ? '<span class="muted">Administra o site</span>' : `${esc(GENERO[r.genero])} · ${esc(papelDe(r))}${r.moto ? `<small>${esc(r.moto)}</small>` : ""}`}</td>
     <td class="num"><b>${fmtN(r.cidades)}</b></td>
     <td class="num">${r.ultima_visita ? fmtDate(r.ultima_visita) : "—"}</td>
     <td>${esc(ago(r.ultimo_acesso))}</td>
@@ -869,7 +1027,7 @@ function renderAdmin(){
     <td><div class="acts" data-id="${r.id}">
       <button data-a="map">Ver mapa</button><button data-a="edit">Editar</button><button data-a="pw">Senha</button>
       ${r.id === me.id ? "" : `<button data-a="adm">${r.is_admin ? "Tirar admin" : "Tornar admin"}</button><button data-a="del" class="del">Excluir</button>`}
-    </div></td></tr>`).join("") || `<tr><td colspan="7" class="muted">Ninguém encontrado.</td></tr>`;
+    </div></td></tr>`).join("") || `<tr><td colspan="7" class="muted" style="text-align:center;padding:32px">${admRows.length ? "Ninguém encontrado." : "Nenhuma conta ainda."}</td></tr>`;
   $("admRows").querySelectorAll(".acts button").forEach(b => b.onclick = () => admAction(b.dataset.a, admRows.find(r => r.id === b.parentElement.dataset.id)));
 }
 function admAction(a, r){
@@ -882,7 +1040,7 @@ function admAction(a, r){
       toast(`Senha de <b>${esc(r.nome)}</b> atualizada`, 3500);
     }}] });
   if (a === "adm") return modal({ title: r.is_admin ? `Tirar admin de ${r.nome}?` : `Tornar ${r.nome} admin?`,
-    body: `<p style="margin:0">${r.is_admin ? "A pessoa perde o acesso a este painel." : "A pessoa passa a ver e gerenciar os dados de todo mundo."}</p>`,
+    body: `<p style="margin:0">${r.is_admin ? "A pessoa volta a usar o site normalmente e perde o acesso à administração." : "A pessoa deixa de usar o mapa e passa a ver o console de administração, com os dados de todo mundo."}</p>`,
     actions: [{ label: "Cancelar", cls: "ghost" }, { label: "Confirmar", onClick: async () => {
       const { error } = await sb.from("profiles").update({ is_admin: !r.is_admin }).eq("id", r.id); if (error) throw new Error(error.message);
       await loadAdmin();
@@ -913,16 +1071,37 @@ function admAction(a, r){
       const nome = $("aeNome").value.trim(); if (nome.length < 2) throw new Error("Nome muito curto.");
       const { error } = await sb.from("profiles").update({ nome, genero: $("aeGen").value, papel: $("aePap").value, moto: $("aeMoto").value.trim() || null, aparece_ranking: $("aeRank").checked }).eq("id", r.id);
       if (error) throw new Error(error.message);
-      if (r.id === me.id){ profile = { ...profile, nome, genero: $("aeGen").value }; renderMe(); }
+      if (r.id === me.id){ profile = { ...profile, nome }; renderMe(); }
       toast("Dados salvos."); await loadAdmin();
     }}] });
 }
 $("admCsv").onclick = () => {
   const cols = ["nome","email","genero","papel","moto","pilota_desde","estilo","cidade","cidades","ultima_visita","ultimo_acesso","criado_em","aparece_ranking","is_admin"];
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const lines = [cols.join(";")].concat(admRows.map(r => [r.nome, r.email, GENERO[r.genero], PAPEL[r.papel], r.moto, r.pilota_desde, ESTILO[r.estilo], cityLabel(r.cidade_id), r.cidades, r.ultima_visita, r.ultimo_acesso, r.criado_em, r.aparece_ranking ? "sim" : "não", r.is_admin ? "sim" : "não"].map(q).join(";")));
+  const lines = [cols.join(";")].concat(admRows.map(r => [r.nome, r.email, GENERO[r.genero], papelDe(r), r.moto, r.pilota_desde, ESTILO[r.estilo], cityLabel(r.cidade_id), r.cidades, r.ultima_visita, r.ultimo_acesso, r.criado_em, r.aparece_ranking ? "sim" : "não", r.is_admin ? "sim" : "não"].map(q).join(";")));
   download(`por-onde-rodei-usuarios-${today()}.csv`, "﻿" + lines.join("\n"), "text/csv;charset=utf-8");
 };
+
+/* conta do administrador */
+function renderConta(){
+  $("adminCard").innerHTML = `${avatar(me.id, profile.nome)}
+    <div><span class="kicker">Administrador</span><h2>${esc(profile.nome)}</h2><div class="meta">${esc(me.email)}</div>
+      <div class="facts"><span>Gerencia ${fmtN(admRows.filter(r => !r.is_admin).length)} ${admRows.filter(r => !r.is_admin).length === 1 ? "usuário" : "usuários"}</span><span>Desde ${new Date(profile.criado_em || Date.now()).toLocaleDateString("pt-BR")}</span></div></div>`;
+  $("acNome").value = profile.nome; $("acPw").value = ""; $("acErr").textContent = "";
+}
+$("acForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nome = $("acNome").value.trim(), pw = $("acPw").value;
+  if (nome.length < 2){ $("acErr").textContent = "O nome precisa ter pelo menos 2 letras."; return; }
+  if (pw && pw.length < 6){ $("acErr").textContent = "A senha precisa ter pelo menos 6 caracteres."; return; }
+  if (nome !== profile.nome){
+    const { data, error } = await sb.from("profiles").update({ nome }).eq("id", me.id).select().single();
+    if (error){ $("acErr").textContent = authMsg(error); return; }
+    profile = data;
+  }
+  if (pw){ const { error } = await sb.auth.updateUser({ password: pw }); if (error){ $("acErr").textContent = authMsg(error); return; } }
+  renderMe(); renderConta(); toast("Conta atualizada.");
+});
 
 /* =====================================================================
    Confete

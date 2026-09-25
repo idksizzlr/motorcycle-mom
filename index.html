@@ -65,7 +65,7 @@
           <div class="steplbl">Parada 1 de 4 · Sua conta</div>
           <h3>Vamos preparar sua garagem</h3>
           <div style="display:grid;gap:12px;margin-top:12px">
-            <label class="field"><span>Como quer ser chamada(o)?</span><input class="input" id="suNome" maxlength="40" autocomplete="nickname" placeholder="Ex.: Dona Márcia"></label>
+            <label class="field"><span>Como quer ser chamada(o)?</span><input class="input" id="suNome" maxlength="40" autocomplete="nickname" placeholder="Ex.: José"></label>
             <label class="field"><span>E-mail</span><input class="input" id="suEmail" type="email" autocomplete="email"></label>
             <label class="field"><span>Senha (mínimo 6 caracteres)</span><input class="input" id="suPass" type="password" autocomplete="new-password"></label>
           </div>
@@ -131,21 +131,35 @@
       <svg width="40" height="28" viewBox="0 0 40 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="20" r="6"/><circle cx="32" cy="20" r="6"/><path d="M8 20 L15 11 H23 L28 20"/><path d="M19 11 L22 5 H27"/><path d="M23 11 L32 20"/><path d="M13 11 H10"/></svg>
       <div><h1>Por onde rodei</h1><small>o Brasil de moto, cidade por cidade</small></div>
     </div>
-    <div class="shield" title="Municípios visitados"><span><i>CIDADES</i><b class="num" id="shieldN">0</b></span></div>
-    <button class="me" id="meBtn" title="Meu perfil"><span class="avatar" id="meAv">?</span><span><b id="meName">—</b><small id="meLevel">—</small></span></button>
+    <div class="shield" id="shield" title="Municípios visitados"><span><i id="shieldLbl">CIDADES</i><b class="num" id="shieldN">0</b></span></div>
+    <span class="grow"></span>
     <div class="sync" id="sync" data-s="ok"><span>Tudo salvo</span></div>
+    <div class="me-wrap">
+      <button class="me" id="meBtn" aria-haspopup="menu" aria-expanded="false"><span class="avatar" id="meAv">?</span><span class="me-txt"><b id="meName">—</b><small id="meLevel">—</small></span><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <div class="menu" id="meMenu" role="menu" hidden>
+        <div class="menu-head"><b id="menuName">—</b><small id="menuEmail">—</small></div>
+        <button role="menuitem" id="menuProfile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg><span id="menuProfileTxt">Meu perfil</span></button>
+        <button role="menuitem" id="logoutBtn" class="danger"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h4v16h-4M10 17l5-5-5-5M15 12H3"/></svg>Sair da conta</button>
+      </div>
+    </div>
   </header>
 
   <nav class="nav" id="nav" aria-label="Seções">
-    <button data-v="mapa" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Mapa</button>
-    <button data-v="diario"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>Diário</button>
-    <button data-v="conquistas"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-3 5 3-1.5-8"/></svg>Conquistas</button>
-    <button data-v="ranking"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V11H3v10zM15 21V4H9v17zM21 21v-7h-5v7z"/></svg>Ranking</button>
-    <button data-v="perfil"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Perfil</button>
-    <button data-v="admin" class="admin-tab" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>Admin</button>
+    <!-- quem usa -->
+    <button data-v="mapa" data-for="user"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Mapa</button>
+    <button data-v="diario" data-for="user"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>Diário</button>
+    <button data-v="conquistas" data-for="user"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-3 5 3-1.5-8"/></svg>Conquistas</button>
+    <button data-v="ranking" data-for="user"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V11H3v10zM15 21V4H9v17zM21 21v-7h-5v7z"/></svg>Ranking</button>
+    <button data-v="perfil" data-for="user"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Perfil</button>
+    <!-- administrador -->
+    <button data-v="painel" data-for="admin" class="first-admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Visão geral</button>
+    <button data-v="usuarios" data-for="admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-7 7-7s7 3 7 7M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5.5-4.5-6.5"/></svg>Usuários</button>
+    <button data-v="mapa" data-for="admin" data-label="Mapa geral"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Mapa geral</button>
+    <button data-v="ranking" data-for="admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V11H3v10zM15 21V4H9v17zM21 21v-7h-5v7z"/></svg>Ranking</button>
+    <button data-v="conta" data-for="admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>Conta</button>
   </nav>
 
-  <!-- mapa -->
+  <!-- ================= mapa (usuário: meu mapa · admin: mapa geral) ================= -->
   <main class="view" id="v-mapa">
     <div class="mapview">
       <div class="mapwrap" id="wrap">
@@ -171,101 +185,129 @@
       </div>
       <aside class="side">
         <div class="stats">
-          <div class="stat"><b class="num" id="sMun">0</b><span>municípios</span></div>
-          <div class="stat"><b class="num" id="sUf">0</b><span>estados de 27</span></div>
-          <div class="stat"><b class="num" id="sCap">0</b><span>capitais de 27</span></div>
-          <div class="stat"><b class="num" id="sKm">0</b><span>km² de Brasil</span></div>
+          <div class="stat"><b class="num" id="sMun">0</b><span id="sMunL">municípios</span></div>
+          <div class="stat"><b class="num" id="sUf">0</b><span id="sUfL">estados de 27</span></div>
+          <div class="stat"><b class="num" id="sCap">0</b><span id="sCapL">capitais de 27</span></div>
+          <div class="stat"><b class="num" id="sKm">0</b><span id="sKmL">km² de Brasil</span></div>
         </div>
         <div class="odo">
-          <div class="lbl"><span>Brasil percorrido</span><span class="num" id="pct">0%</span></div>
+          <div class="lbl"><span id="pctL">Brasil percorrido</span><span class="num" id="pct">0%</span></div>
           <div class="bar"><i id="pctBar" style="width:0%"></i></div>
         </div>
-        <h4>Por estado</h4>
+        <h4 id="sideH">Por estado</h4>
         <div class="ufl" id="ufList"></div>
       </aside>
     </div>
   </main>
 
-  <main class="view" id="v-diario" hidden>
-    <div class="view-head"><div><h2>Diário de bordo</h2><p id="diarySub">Cada cidade marcada vira uma página.</p></div></div>
+  <!-- ================= diário ================= -->
+  <main class="view narrow" id="v-diario" hidden>
+    <div class="view-head"><div><span class="kicker">Suas viagens</span><h2>Diário de bordo</h2><p id="diarySub">Cada cidade marcada vira uma página.</p></div></div>
+    <div class="diary-sum" id="diarySum"></div>
     <div class="diary" id="diary"></div>
   </main>
 
-  <main class="view" id="v-conquistas" hidden>
+  <!-- ================= conquistas ================= -->
+  <main class="view mid" id="v-conquistas" hidden>
+    <div class="view-head"><div><span class="kicker">Sua jornada</span><h2>Conquistas</h2><p>Cada cidade nova conta. Veja o que já foi e o que está logo ali.</p></div></div>
     <div id="levelBox"></div>
+    <div id="nearBox"></div>
     <div id="badgeBox"></div>
   </main>
 
-  <main class="view" id="v-ranking" hidden>
-    <div class="view-head"><div><h2>Ranking da estrada</h2><p>Quem já passou por mais cidades. Toque numa pessoa para comparar os mapas.</p></div></div>
+  <!-- ================= ranking ================= -->
+  <main class="view mid" id="v-ranking" hidden>
+    <div class="view-head"><div><span class="kicker">Quem roda mais</span><h2>Ranking da estrada</h2><p id="rankSub">Quem já passou por mais cidades. Toque numa pessoa para comparar os mapas.</p></div></div>
     <div class="rfilters">
-      <div class="chips" id="rGenero">
-        <button class="chip" data-v="" aria-pressed="true">Todo mundo</button>
-        <button class="chip" data-v="mulher" aria-pressed="false">Mulheres</button>
-        <button class="chip" data-v="homem" aria-pressed="false">Homens</button>
+      <div class="seg" id="rGenero">
+        <button data-v="" aria-pressed="true">Todo mundo</button>
+        <button data-v="mulher" aria-pressed="false">Mulheres</button>
+        <button data-v="homem" aria-pressed="false">Homens</button>
       </div>
-      <div class="chips" id="rPeriodo">
-        <button class="chip" data-v="" aria-pressed="true">Desde sempre</button>
-        <button class="chip" data-v="ano" aria-pressed="false">Este ano</button>
-        <button class="chip" data-v="mes" aria-pressed="false">Este mês</button>
+      <div class="seg" id="rPeriodo">
+        <button data-v="" aria-pressed="true">Desde sempre</button>
+        <button data-v="ano" aria-pressed="false">Este ano</button>
+        <button data-v="mes" aria-pressed="false">Este mês</button>
       </div>
     </div>
     <div id="rankBox"></div>
   </main>
 
-  <main class="view" id="v-perfil" hidden>
-    <div class="view-head"><div><h2>Seu perfil</h2><p id="profSub"></p></div><button class="btn ghost sm" id="logoutBtn">Sair da conta</button></div>
+  <!-- ================= perfil (usuário) ================= -->
+  <main class="view mid" id="v-perfil" hidden>
+    <div class="passport" id="passport"></div>
     <div class="profile">
       <form class="panel" id="profForm" novalidate>
-        <h3>Dados da garagem</h3>
+        <div class="panel-h"><h3>Dados da garagem</h3><p class="muted">Aparecem no ranking e deixam as conquistas com a sua cara.</p></div>
         <div class="grid2">
           <label class="field"><span>Nome</span><input class="input" id="pfNome" maxlength="40"></label>
           <label class="field"><span>Você é</span><select class="input" id="pfGenero"><option value="mulher">Mulher</option><option value="homem">Homem</option><option value="outro">Outro</option><option value="nao_informado">Prefiro não dizer</option></select></label>
           <label class="field"><span>Na moto</span><select class="input" id="pfPapel"><option value="piloto">Pilotando</option><option value="garupa">Na garupa</option><option value="os_dois">Um pouco de cada</option></select></label>
           <label class="field"><span>Estilo</span><select class="input" id="pfEstilo"><option value="estrada">Asfalto e estrada</option><option value="serra">Serra e curvas</option><option value="praia">Litoral</option><option value="terra">Terra e trilha</option><option value="de_tudo">De tudo um pouco</option></select></label>
-          <label class="field"><span>Moto</span><input class="input" id="pfMoto" maxlength="60"></label>
+          <label class="field"><span>Moto</span><input class="input" id="pfMoto" maxlength="60" placeholder="Ex.: Honda CG 160"></label>
           <label class="field"><span>Na estrada desde</span><select class="input" id="pfDesde"><option value="">Prefiro não dizer</option></select></label>
         </div>
         <label class="field citypick"><span>Cidade de partida</span><input class="input" id="pfCidade" autocomplete="off" placeholder="Digite o nome da cidade"><ul id="pfCidadeRes" hidden></ul></label>
         <label class="switch"><input type="checkbox" id="pfRanking"> Aparecer no ranking</label>
         <div class="err" id="pfErr" role="alert"></div>
-        <div><button class="btn" type="submit">Salvar perfil</button></div>
+        <div class="panel-f"><button class="btn" type="submit">Salvar alterações</button></div>
       </form>
-      <div style="display:grid;gap:16px">
+      <div class="stack">
         <div class="panel">
-          <h3>Trazer marcações antigas</h3>
-          <p class="muted" style="margin:0">Se você usava a versão do computador, clique em “Salvar cópia” lá e depois importe o arquivo aqui. As cidades se juntam às desta conta.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <label class="btn ghost sm" for="impFile" style="cursor:pointer">Importar cópia (.json)<input type="file" id="impFile" accept=".json,application/json" hidden></label>
-            <button class="btn ghost sm" id="expBtn">Baixar minhas marcações</button>
-          </div>
-        </div>
-        <div class="panel">
-          <h3>Senha</h3>
-          <form id="pwForm" style="display:grid;gap:10px" novalidate>
-            <label class="field"><span>Nova senha</span><input class="input" id="pwNew" type="password" autocomplete="new-password"></label>
+          <div class="panel-h"><h3>Senha</h3></div>
+          <form id="pwForm" class="stack" novalidate>
+            <label class="field"><span>Nova senha</span><input class="input" id="pwNew" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
             <div class="err" id="pwErr" role="alert"></div>
-            <div><button class="btn ghost sm" type="submit">Trocar senha</button></div>
+            <div><button class="btn ghost" type="submit">Trocar senha</button></div>
           </form>
         </div>
         <div class="panel">
-          <h3>Excluir conta</h3>
-          <p class="muted" style="margin:0">Apaga para sempre sua conta e todas as cidades marcadas.</p>
-          <div><button class="btn danger sm" id="delMeBtn">Excluir minha conta</button></div>
+          <div class="panel-h"><h3>Suas marcações</h3><p class="muted">Traga as cidades da versão do computador ou guarde uma cópia.</p></div>
+          <div class="btnrow">
+            <label class="btn ghost" for="impFile">Importar cópia<input type="file" id="impFile" accept=".json,application/json" hidden></label>
+            <button class="btn ghost" id="expBtn">Baixar cópia</button>
+          </div>
+        </div>
+        <div class="panel danger-zone">
+          <div class="panel-h"><h3>Excluir conta</h3><p class="muted">Apaga para sempre a conta e todas as cidades marcadas.</p></div>
+          <div><button class="btn danger" id="delMeBtn">Excluir minha conta</button></div>
         </div>
       </div>
     </div>
   </main>
 
-  <main class="view" id="v-admin" hidden>
-    <div class="view-head"><div><h2>Painel do administrador</h2><p>Gerencie as contas e os dados de quem usa o site.</p></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="admCsv">Baixar planilha (CSV)</button><button class="btn ghost sm" id="admReload">Atualizar</button></div></div>
+  <!-- ================= admin: visão geral ================= -->
+  <main class="view" id="v-painel" hidden>
+    <div class="view-head"><div><span class="kicker">Administração</span><h2>Visão geral</h2><p>Como o Por Onde Rodei está sendo usado.</p></div></div>
     <div class="kpis" id="admKpis"></div>
-    <div class="search" style="max-width:420px;margin-bottom:12px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="admQ" type="search" placeholder="Buscar por nome ou e-mail" autocomplete="off">
+    <div class="dash" id="dash"></div>
+  </main>
+
+  <!-- ================= admin: usuários ================= -->
+  <main class="view" id="v-usuarios" hidden>
+    <div class="view-head"><div><span class="kicker">Administração</span><h2>Usuários</h2><p>Edite dados, redefina senhas, veja o mapa de cada pessoa ou remova contas.</p></div></div>
+    <div class="toolbar">
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="admQ" type="search" placeholder="Buscar por nome ou e-mail" autocomplete="off" aria-label="Buscar usuário">
+      </div>
+      <div class="btnrow"><button class="btn ghost" id="admCsv">Baixar planilha</button><button class="btn ghost" id="admReload">Atualizar</button></div>
     </div>
     <div class="tablewrap"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Cidades</th><th>Última viagem</th><th>Último acesso</th><th>Criada em</th><th>Ações</th></tr></thead><tbody id="admRows"></tbody></table></div>
+  </main>
+
+  <!-- ================= admin: conta ================= -->
+  <main class="view narrow" id="v-conta" hidden>
+    <div class="passport admin" id="adminCard"></div>
+    <div class="profile single">
+      <form class="panel" id="acForm" novalidate>
+        <div class="panel-h"><h3>Seus dados</h3></div>
+        <label class="field"><span>Nome de exibição</span><input class="input" id="acNome" maxlength="40"></label>
+        <label class="field"><span>Nova senha</span><input class="input" id="acPw" type="password" autocomplete="new-password" placeholder="Deixe em branco para manter a atual"></label>
+        <div class="err" id="acErr" role="alert"></div>
+        <div class="panel-f"><button class="btn" type="submit">Salvar</button></div>
+      </form>
+    </div>
   </main>
 </div>
 

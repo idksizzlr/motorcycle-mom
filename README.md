@@ -1,7 +1,10 @@
 # Por Onde Rodei
 
 Mapa interativo dos 5.570 municípios do Brasil para marcar as cidades por onde você já passou de moto.
-Tem contas de usuário, diário de viagem, níveis e conquistas, ranking com comparação de mapas e painel de administrador.
+
+**Quem usa** vê: Mapa, Diário, Conquistas, Ranking e Perfil.
+**Quem administra** vê outro site: Visão geral (números e gráficos), Usuários (editar, redefinir senha, ver mapa, excluir),
+Mapa geral (por onde a turma toda já passou), Ranking e Conta. Admins não aparecem no ranking nem nas estatísticas.
 
 ## Como funciona
 
