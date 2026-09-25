@@ -357,16 +357,18 @@ $("signupForm").addEventListener("submit", async (e) => {
   authTab("login"); $("liEmail").value = $("suEmail").value.trim();
 });
 
-/* mapa animado da tela de entrada */
-let heroRaf = 0;
+/* mapa animado da tela de entrada: motoviagens que nunca param */
+let heroGen = 0, NB = null;
+const neighbors = () => NB || (NB = topojson.neighbors(topoObj.geometries));
 async function startHero(){
   try { await geoReady; } catch { return; }
   const cv = $("heroMap"); if (!cv || $("auth").hidden) return;
   const box = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
   const W = box.width, H = box.height; if (!W || !H) return;
-  cv.width = W*dpr; cv.height = H*dpr;
-  const ctx = cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
-  const fc = { type:"FeatureCollection", features:feats };
+  const gen = ++heroGen;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext("2d");
+  const fc = { type: "FeatureCollection", features: feats };
   // Brasil grande, ancorado à direita, logo abaixo da placa, descendo até a base:
   // o formato do país (largo em cima, fino embaixo) contorna o texto no canto inferior esquerdo.
   const hero = cv.parentElement, hb = hero.getBoundingClientRect();
@@ -375,29 +377,124 @@ async function startHero(){
   const area = [[W * .05, plateBottom + pad * .6], [W - 6, H - pad * .4]];
   const proj = d3.geoMercator().fitExtent(area, fc);
   const bb = d3.geoPath(proj).bounds(fc), [tx, ty] = proj.translate();
-  proj.translate([tx + (area[1][0] - bb[1][0])+ W * .06, ty + (area[0][1] - bb[0][1])]);   // um tiquinho além da borda direita
-  const path = d3.geoPath(proj, ctx);
-  ctx.clearRect(0,0,W,H);
-  ctx.beginPath(); path(topojson.mesh(topo, topoObj, (a,b) => a !== b)); ctx.strokeStyle = "rgba(255,255,255,.16)"; ctx.lineWidth = .5; ctx.stroke();
-  ctx.beginPath(); path(topojson.mesh(topo, topoObj, (a,b) => a === b || a.properties.uf !== b.properties.uf)); ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1.1; ctx.stroke();
-  // uma "viagem" que acende municípios vizinhos, um por vez
-  const nb = topojson.neighbors(topoObj.geometries);
-  const lit = new Set();
-  let cur = Math.floor(Math.random()*feats.length), steps = 0;
-  cancelAnimationFrame(heroRaf);
-  const paint = (i, color) => { ctx.beginPath(); path(feats[i]); ctx.fillStyle = color; ctx.fill(); };
-  const step = () => {
-    if ($("auth").hidden) return;
-    for (let k = 0; k < 2; k++){
-      lit.add(cur); paint(cur, steps % 9 === 0 ? "#F2B134" : "rgba(242,177,52,.55)");
-      const opts = nb[cur].filter(j => !lit.has(j));
-      cur = opts.length ? opts[Math.floor(Math.random()*opts.length)] : [...lit][Math.floor(Math.random()*lit.size)];
-      steps++;
+  proj.translate([tx + (area[1][0] - bb[1][0]) + W * .06, ty + (area[0][1] - bb[0][1])]);   // um tiquinho além da borda direita
+  const [[mx0], [mx1]] = d3.geoPath(proj).bounds(fc), mapW = mx1 - mx0;
+
+  // fundo fixo (divisas), desenhado uma vez só
+  const base = document.createElement("canvas"); base.width = cv.width; base.height = cv.height;
+  const bctx = base.getContext("2d"); bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const bpath = d3.geoPath(proj, bctx);
+  bctx.beginPath(); bpath(topojson.mesh(topo, topoObj, (a, b) => a !== b)); bctx.strokeStyle = "rgba(255,255,255,.16)"; bctx.lineWidth = .5; bctx.stroke();
+  bctx.beginPath(); bpath(topojson.mesh(topo, topoObj, (a, b) => a === b || a.properties.uf !== b.properties.uf)); bctx.strokeStyle = "rgba(255,255,255,.55)"; bctx.lineWidth = 1.1; bctx.stroke();
+
+  const svgPath = d3.geoPath(proj), shapes = new Map(), cents = new Map();
+  const shape = (i) => { let s = shapes.get(i); if (!s){ s = new Path2D(svgPath(feats[i])); shapes.set(i, s); } return s; };
+  const cent = (i) => { let c = cents.get(i); if (!c){ c = proj(feats[i].c); cents.set(i, c); } return c; };
+  const nb = neighbors();
+  const COLORS = ["242,177,52", "255,122,69", "255,227,163"];
+  const lit = new Map();            // município -> { t, c }
+  const pulses = [];                // anel de chegada ao destino
+  const speed = mapW / 5200;        // px por ms: atravessar o país leva uns 5 s
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  function newRider(k, now){
+    const i = Math.floor(Math.random() * feats.length);
+    return { k, c: COLORS[k % COLORS.length], cur: i, next: -1, t0: now, dur: 1, heading: rand(-Math.PI, Math.PI),
+      trail: [cent(i)], seen: new Set([i]), hops: 0, max: Math.floor(rand(28, 75)), wait: 0 };
+  }
+  // segue na direção em que vinha (como numa estrada), com um pouco de acaso
+  function pickNext(r){
+    const [x, y] = cent(r.cur);
+    let best = -1, bestScore = -Infinity;
+    for (const j of nb[r.cur]){
+      if (r.seen.has(j)) continue;
+      const [x2, y2] = cent(j), a = Math.atan2(y2 - y, x2 - x);
+      const s = Math.cos(a - r.heading) + Math.random() * .7;
+      if (s > bestScore){ bestScore = s; best = j; }
     }
-    if (steps < 900) heroRaf = requestAnimationFrame(() => setTimeout(step, 40));
+    return best;
+  }
+  function hop(r, now){
+    lit.set(r.cur, { t: now, c: r.c });
+    const j = r.hops < r.max ? pickNext(r) : -1;
+    if (j < 0){
+      pulses.push({ p: cent(r.cur), t: now, c: r.c });
+      r.wait = now + rand(500, 1400); r.next = -1; return;
+    }
+    const [x, y] = cent(r.cur), [x2, y2] = cent(j);
+    const a = Math.atan2(y2 - y, x2 - x);
+    r.heading += Math.atan2(Math.sin(a - r.heading), Math.cos(a - r.heading)) * .35 + rand(-.12, .12);
+    r.next = j; r.t0 = now; r.dur = Math.min(380, Math.max(70, Math.hypot(x2 - x, y2 - y) / speed));
+    r.seen.add(j); r.hops++;
+  }
+
+  const riders = [];
+  const nRiders = W < 520 ? 2 : 3;
+  const frame = (now) => {
+    if (gen !== heroGen || $("auth").hidden) return;
+    while (riders.length < nRiders){ const r = newRider(riders.length, now); riders.push(r); hop(r, now); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(base, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // cidades acesas: acendem rápido e apagam devagar, então o mapa nunca "enche"
+    for (const [i, L] of lit){
+      const age = now - L.t;
+      const a = age < 250 ? .8 * (age / 250) : age < 3000 ? .8 - .45 * ((age - 250) / 2750) : .35 * (1 - (age - 3000) / 6000);
+      if (a <= 0){ lit.delete(i); continue; }
+      ctx.fillStyle = "rgba(" + L.c + "," + a.toFixed(3) + ")"; ctx.fill(shape(i));
+    }
+    // motos: rastro com faixa de estrada tracejada + farol
+    for (const r of riders){
+      if (r.next < 0){
+        if (now >= r.wait){ Object.assign(r, newRider(r.k, now)); hop(r, now); }
+        else continue;
+      }
+      let k = Math.min(1, (now - r.t0) / r.dur);
+      while (k >= 1 && r.next >= 0){
+        r.cur = r.next; r.trail.push(cent(r.cur)); if (r.trail.length > 22) r.trail.shift();
+        hop(r, r.t0 + r.dur);
+        if (r.next < 0) break;
+        k = Math.min(1, (now - r.t0) / r.dur);
+      }
+      const from = cent(r.cur), to = r.next >= 0 ? cent(r.next) : from;
+      const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const hx = from[0] + (to[0] - from[0]) * e, hy = from[1] + (to[1] - from[1]) * e;
+      const pts = r.trail.concat([[hx, hy]]);
+      if (pts.length > 1){
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.beginPath(); pts.forEach(([x, y], n) => n ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+        ctx.setLineDash([]); ctx.strokeStyle = "rgba(" + r.c + ",.28)"; ctx.lineWidth = 5; ctx.stroke();
+        ctx.setLineDash([5, 6]); ctx.lineDashOffset = -now / 40; ctx.strokeStyle = "rgba(" + r.c + ",.95)"; ctx.lineWidth = 1.6; ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (r.next >= 0){
+        const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, 14);
+        g.addColorStop(0, "rgba(" + r.c + ",.9)"); g.addColorStop(1, "rgba(" + r.c + ",0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hx, hy, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(hx, hy, 2.8, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    for (let n = pulses.length - 1; n >= 0; n--){
+      const P = pulses[n], age = (now - P.t) / 1100;
+      if (age >= 1){ pulses.splice(n, 1); continue; }
+      ctx.strokeStyle = "rgba(" + P.c + "," + (1 - age).toFixed(3) + ")"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(P.p[0], P.p[1], 4 + age * 30, 0, Math.PI * 2); ctx.stroke();
+    }
+    requestAnimationFrame(frame);
   };
-  if (reduced()){ for (let i = 0; i < 160; i++){ lit.add(cur); paint(cur, "rgba(242,177,52,.6)"); const o = nb[cur].filter(j => !lit.has(j)); cur = o.length ? o[0] : cur; } }
-  else step();
+
+  if (reduced()){
+    // quem prefere menos movimento vê uma foto parada de três viagens
+    const now = performance.now();
+    for (let k = 0; k < nRiders; k++){
+      const r = newRider(k, now); hop(r, now);
+      for (let s = 0; s < 40 && r.next >= 0; s++){ r.cur = r.next; hop(r, now); }
+    }
+    ctx.drawImage(base, 0, 0); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const [i, L] of lit){ ctx.fillStyle = "rgba(" + L.c + ",.6)"; ctx.fill(shape(i)); }
+    return;
+  }
+  requestAnimationFrame(frame);
 }
 let heroRT; addEventListener("resize", () => { if (!$("auth").hidden){ clearTimeout(heroRT); heroRT = setTimeout(startHero, 250); } });
 
@@ -408,10 +505,15 @@ async function enterApp(user, fresh = false){
   if (entered && me?.id === user.id) return;
   entered = true;
   me = { id: user.id, email: user.email };
-  cancelAnimationFrame(heroRaf);
+  heroGen++;
   // perfil
   let { data: p } = await sb.from("profiles").select("*").eq("id", me.id).maybeSingle();
   if (!p){ await new Promise(r => setTimeout(r, 800)); ({ data: p } = await sb.from("profiles").select("*").eq("id", me.id).maybeSingle()); }
+  if (!p){
+    // conta excluída (ou sessão inválida): volta para a tela de entrada
+    const { error: ue } = await sb.auth.getUser();
+    if (ue && !/fetch|network/i.test(ue.message || "")){ entered = false; me = null; await sb.auth.signOut(); showAuth(); return; }
+  }
   profile = p || { id: me.id, nome: user.email.split("@")[0], genero: "nao_informado", papel: "os_dois", estilo: "de_tudo", aparece_ranking: true, is_admin: false };
   // visitas: primeiro o que está no aparelho, depois o banco
   try { V = JSON.parse(store.get(vKey()) || "{}"); } catch { V = {}; }
