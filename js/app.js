@@ -373,7 +373,7 @@ async function startHero(){
   const area = [[W * .05, plateBottom + pad * .6], [W - 6, H - pad * .4]];
   const proj = d3.geoMercator().fitExtent(area, fc);
   const bb = d3.geoPath(proj).bounds(fc), [tx, ty] = proj.translate();
-  proj.translate([tx + (area[1][0] - bb[1][0]) + W * .03, ty + (area[0][1] - bb[0][1])]);   // um tiquinho além da borda direita
+  proj.translate([tx + (area[1][0] - bb[1][0])+ W * .06, ty + (area[0][1] - bb[0][1])]);   // um tiquinho além da borda direita
   const path = d3.geoPath(proj, ctx);
   ctx.clearRect(0,0,W,H);
   ctx.beginPath(); path(topojson.mesh(topo, topoObj, (a,b) => a !== b)); ctx.strokeStyle = "rgba(255,255,255,.16)"; ctx.lineWidth = .5; ctx.stroke();
