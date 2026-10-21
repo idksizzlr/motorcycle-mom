@@ -208,7 +208,10 @@ function authMsg(e){
   if (m.includes("password") && (m.includes("6") || m.includes("short") || m.includes("weak"))) return "A senha precisa ter pelo menos 6 caracteres.";
   if (m.includes("rate limit") || m.includes("too many")) return "Muitas tentativas seguidas. Espere alguns minutos e tente de novo.";
   if (m.includes("invalid") && m.includes("email")) return "Esse e-mail não parece válido.";
-  if (m.includes("failed to fetch") || m.includes("network")) return "Sem conexão com a internet. Tente de novo.";
+  if (m.includes("failed to fetch") || m.includes("network") || m.includes("load failed"))
+    return navigator.onLine === false
+      ? "Sem conexão com a internet. Tente de novo."
+      : "O servidor do site está fora do ar agora. Tente de novo mais tarde e, se continuar, avise o administrador.";
   return e?.message || "Algo deu errado. Tente de novo.";
 }
 
