@@ -126,6 +126,10 @@ const BADGES = [
   {g:"Diário", k:"dia10",   t:"Dia de estrada",         d:"10 cidades no mesmo dia",                      m:"sameDay",  goal:10,  i:"bolt"},
   {g:"Diário", k:"dia25",   t:"Pé na tábua",            d:"25 cidades no mesmo dia",                      m:"sameDay",  goal:25,  i:"bolt"},
   {g:"Diário", k:"ano",     t:"Um ano de estrada",      d:"Um ano entre a primeira e a última viagem",    m:"anoDias",  goal:365, i:"cal"},
+
+  {g:"Viagens", k:"v1",   t:"Roteirista",              d:"Planeje a sua primeira viagem",   m:"viagens",   goal:1, i:"map"},
+  {g:"Viagens", k:"vok1", t:"Missão cumprida",         d:"Conclua uma viagem planejada",    m:"viagensOk", goal:1, i:"flag"},
+  {g:"Viagens", k:"vok5", t:"Estradeira de carteirinha", tm:"Estradeiro de carteirinha", d:"Conclua 5 viagens planejadas", m:"viagensOk", goal:5, i:"crown"},
 ];
 
 /* =====================================================================
@@ -297,14 +301,29 @@ async function flush(){
   if (!ids.length){ setSync("ok"); return; }
   syncing = true; setSync("saving");
   let failed = false;
-  for (const id of ids){
-    const it = Q[id]; if (!it) continue;
-    let error;
-    if (it.op === "up") ({ error } = await sb.from("visitas").upsert({ user_id: me.id, municipio_id: id, data: it.d, nota: it.n }));
-    else ({ error } = await sb.from("visitas").delete().eq("user_id", me.id).eq("municipio_id", id));
-    if (error && !error.code){ failed = true; break; }           // rede: tenta depois
-    if (error) console.warn("Descartado", id, error);             // dado inválido: descarta
-    if (JSON.stringify(Q[id]) === JSON.stringify(it)) delete Q[id];
+  // envia em lotes (concluir uma viagem pode marcar centenas de cidades de uma vez)
+  const snap = ids.map(id => [id, Q[id]]).filter(([, it]) => it);
+  const ups = snap.filter(([, it]) => it.op === "up"), dels = snap.filter(([, it]) => it.op !== "up");
+  const done = (pairs) => { for (const [id, it] of pairs) if (JSON.stringify(Q[id]) === JSON.stringify(it)) delete Q[id]; };
+  const row = ([id, it]) => ({ user_id: me.id, municipio_id: id, data: it.d, nota: it.n });
+  for (let i = 0; i < ups.length && !failed; i += 200){
+    const part = ups.slice(i, i + 200);
+    const { error } = await sb.from("visitas").upsert(part.map(row));
+    if (error && !error.code){ failed = true; break; }            // rede: tenta depois
+    if (!error){ done(part); continue; }
+    for (const pair of part){                                       // lote recusado: um a um, descartando só o inválido
+      const { error: e1 } = await sb.from("visitas").upsert(row(pair));
+      if (e1 && !e1.code){ failed = true; break; }
+      if (e1) console.warn("Descartado", pair[0], e1);
+      done([pair]);
+    }
+  }
+  for (let i = 0; i < dels.length && !failed; i += 200){
+    const part = dels.slice(i, i + 200);
+    const { error } = await sb.from("visitas").delete().eq("user_id", me.id).in("municipio_id", part.map(([id]) => id));
+    if (error && !error.code){ failed = true; break; }
+    if (error) console.warn("Descartado", error);
+    done(part);
   }
   saveLocal(); syncing = false;
   if (failed){ setSync("off"); clearTimeout(retryT); retryT = setTimeout(flush, 15000); }
@@ -622,7 +641,7 @@ async function enterApp(user, fresh = false){
     console.error(e);
     const ml = $("mapLoading"); if (ml) ml.innerHTML = "<div>O mapa não carregou. Verifique a internet e recarregue a página.</div>";
   }
-  if (isAdmin()) loadAdmin();
+  if (isAdmin()) loadAdmin(); else loadTrips();
   flush();
   if (!isAdmin() && !Object.keys(V).length && !store.get(`por:${me.id}:recuperacao`)){
     const c = oldDeviceCopies(me.id)[0];
@@ -632,7 +651,7 @@ async function enterApp(user, fresh = false){
 }
 
 /* Quem usa o app e quem administra veem sites diferentes */
-const VIEWS = { user: ["mapa","diario","conquistas","ranking","perfil"], admin: ["painel","usuarios","mapa","ranking","conta"] };
+const VIEWS = { user: ["mapa","diario","viagens","conquistas","ranking","perfil"], admin: ["painel","usuarios","mapa","ranking","conta"] };
 const isAdmin = () => !!profile?.is_admin;
 const role = () => isAdmin() ? "admin" : "user";
 function applyRole(){
@@ -665,7 +684,7 @@ $("menuProfile").onclick = () => { toggleMenu(false); showView(isAdmin() ? "cont
 
 sb.auth.onAuthStateChange((event, session) => {
   if (event === "PASSWORD_RECOVERY"){ setTimeout(newPasswordModal, 300); }
-  if (event === "SIGNED_OUT"){ entered = false; me = null; profile = null; V = {}; Q = {}; other = null; heat = null; admRows = []; closeCard(); $("compare").hidden = true; toggleMenu(false); showAuth(); }
+  if (event === "SIGNED_OUT"){ entered = false; me = null; profile = null; V = {}; Q = {}; other = null; heat = null; admRows = []; trips = []; tripSel = null; planning = null; $("planBar").hidden = true; closeCard(); $("compare").hidden = true; toggleMenu(false); showAuth(); }
   if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user && !entered) enterApp(session.user);
   if (event === "INITIAL_SESSION" && !session) showAuth();
 });
@@ -690,7 +709,10 @@ function showView(v){
   document.querySelectorAll("#app > main.view").forEach(m => m.hidden = m.id !== "v-" + v);
   $("nav").querySelectorAll("button").forEach(b => b.dataset.v === v && !b.hidden ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current"));
   history.replaceState(null, "", "#" + v);
+  if (planning && v !== "mapa"){ planning = null; $("planBar").hidden = true; $("quick").hidden = isAdmin(); resetLegend(); paintAll(); drawTripOverlay(); }
+  if (v === "mapa" && mapLayout) setTimeout(mapLayout, 0);
   if (v === "diario") renderDiary();
+  if (v === "viagens") renderTrips();
   if (v === "conquistas") renderBadges();
   if (v === "ranking") loadRanking();
   if (v === "perfil") fillProfile();
@@ -705,7 +727,7 @@ function showView(v){
 /* =====================================================================
    Mapa
    ===================================================================== */
-let proj, path, zoom, W = 0, H = 0, svg, gAll, gMun, selPath, homePath, pathEl = new Map(), mapReady = false;
+let proj, path, zoom, W = 0, H = 0, svg, gAll, gMun, selPath, homePath, pathEl = new Map(), mapReady = false, mapLayout = null;
 let quick = false, selId = null;
 
 function initMap(){
@@ -719,10 +741,13 @@ function initMap(){
   const ufs = gAll.append("path").attr("class","ufs").datum(topojson.mesh(topo, topoObj, (a,b) => a === b || a.properties.uf !== b.properties.uf));
   homePath = gAll.append("path").attr("class","homep");
   selPath = gAll.append("path").attr("class","selp");
+  const rg = gAll.append("g").attr("class","trip-route");
+  routeBase = rg.append("path").attr("class","rt-base"); routeDash = rg.append("path").attr("class","rt-dash");
 
   zoom = d3.zoom().scaleExtent([1,160]).clickDistance(8).tapDistance(12)
-    .on("zoom", (e) => { gAll.attr("transform", e.transform); hideTip(); });
+    .on("zoom", (e) => { gAll.attr("transform", e.transform); curT = e.transform; placeMarks(); hideTip(); });
   svg.call(zoom).on("dblclick.zoom", null);
+  gMarks = svg.append("g").attr("class","trip-marks");
 
   const layout = () => {
     const r = $("wrap").getBoundingClientRect();
@@ -735,15 +760,18 @@ function initMap(){
     path = d3.geoPath(proj);
     grat.attr("d", path); gMun.selectAll("path").attr("d", path); munb.attr("d", path); ufs.attr("d", path);
     selPath.attr("d", selId ? path(byId.get(selId)) : null);
-    drawHome();
+    drawHome(); drawTripOverlay();
     zoom.extent([[0,0],[W,H]]).translateExtent([[-W*.5,-H*.5],[W*1.5,H*1.5]]);
     svg.call(zoom.transform, d3.zoomIdentity);
   };
   let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(layout, 120); }).observe($("wrap"));
+  addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 120); });
+  mapLayout = layout;   // também chamado ao abrir a aba Mapa (não depende só do ResizeObserver)
   layout();
 
   gMun.on("click", (e) => {
     const f = e.target.__data__; if (!f) return;
+    if (planning){ planToggle(f.id); return; }
     if (isAdmin() || (other && !quick)){ select(f.id); return; }
     if (quick) toggle(f.id, e.clientX, e.clientY); else select(f.id);
   });
@@ -848,7 +876,11 @@ $("q").addEventListener("keydown", (e) => {
   else if (e.key === "Escape") R.hidden = true;
 });
 $("q").addEventListener("blur", () => setTimeout(() => $("res").hidden = true, 150));
-function pickHit(i){ const f = hits[i]; if (!f) return; $("res").hidden = true; $("q").value = ""; $("q").blur(); select(f.id); flyTo(f, 25); }
+function pickHit(i){
+  const f = hits[i]; if (!f) return; $("res").hidden = true; $("q").value = ""; $("q").blur();
+  if (planning){ planToggle(f.id); flyTo(f, 14); return; }
+  select(f.id); flyTo(f, 25);
+}
 
 /* comparar mapas */
 async function compareWith(id, nome){
@@ -930,7 +962,8 @@ function stats(){
     ufN: ufByReg[1].size, ufNE: ufByReg[2].size, ufSE: ufByReg[3].size, ufS: ufByReg[4].size, ufCO: ufByReg[5].size,
     maxArea: Math.round(maxArea), tiny, norteEq, tropico: trN + trS, span: n ? Math.round((latMax - latMin) * 111.2) : 0,
     vizPct, estacoes: seasons.size, domingos, sameDay: Math.max(0, ...Object.values(perDay)),
-    anoDias: dMin && dMax ? Math.round((new Date(dMax) - new Date(dMin)) / 864e5) : 0 };
+    anoDias: dMin && dMax ? Math.round((new Date(dMax) - new Date(dMin)) / 864e5) : 0,
+    viagens: trips.filter(t => t.paradas.length).length, viagensOk: trips.filter(t => t.status === "concluida").length };
   const rid = routeIdsOf();
   for (const k in ROUTES) out["rota_" + k] = rid[k].filter(id => V[id]).length;
   return out;
@@ -951,10 +984,14 @@ function heatColor(c){
 function paintAll(){
   if (isAdmin()) return paintAdminMap();
   if (mapReady){
+    const pt = planning ? tripById(planning) : null;
+    const ps = new Set(pt ? pt.paradas.map(x => x.id) : []), pc = new Set(pt ? pt.caminho : []);
     for (const [id, el] of pathEl){
-      const on = !!V[id], o = !!other?.set.has(id);
+      const on = !!V[id], o = !!other?.set.has(id), st = ps.has(id), cm = !st && pc.has(id);
       if (el.classList.contains("v") !== on) el.classList.toggle("v", on);
       if (el.classList.contains("o") !== o) el.classList.toggle("o", o);
+      if (el.classList.contains("s") !== st) el.classList.toggle("s", st);
+      if (el.classList.contains("c") !== cm) el.classList.toggle("c", cm);
       if (el.style.fill){ el.style.fill = ""; el.style.stroke = ""; }
     }
     drawHome();
@@ -968,7 +1005,7 @@ function paintAll(){
   const pct = totalArea ? s.area / totalArea * 100 : 0;
   $("pct").textContent = (pct < 1 && pct > 0 ? pct.toFixed(2) : pct.toFixed(1)).replace(".", ",") + "% do território";
   $("pctBar").style.width = Math.max(pct, s.n ? .8 : 0) + "%";
-  renderUfList(s);
+  if (planning) renderPlanSide(); else renderUfList(s);
   if (profile) renderMe();
   if (view === "diario") renderDiary();
   if (view === "conquistas") renderBadges();
@@ -1094,6 +1131,536 @@ function renderBadges(){
     }).join("")}</div></section>`;
   }).join("") + (profile.cidade_id ? "" : `<p class="muted" style="text-align:center">Dica: escolha sua <b>cidade de partida</b> no Perfil para liberar as conquistas de distância.</p>`);
 }
+
+/* =====================================================================
+   Viagens: planejar o roteiro, organizar o caminho e concluir
+   Regra principal: concluir a viagem marca todas as cidades como visitadas,
+   e marcar todas as paradas conclui a viagem sozinho.
+   ===================================================================== */
+let trips = [], tripSel = null, planning = null, curT = d3.zoomIdentity;
+const tripDirty = new Set(), tripTimers = new Map();
+const STATUS = { planejada: "Planejada", em_andamento: "Em andamento", concluida: "Concluída" };
+const tKey = () => `por:${me.id}:viagens`;
+const tripById = (id) => trips.find(t => t.id === id);
+const saveTripsLocal = () => store.set(tKey(), JSON.stringify(trips));
+const stopName = (id) => byId.get(id)?.properties.n || "";
+const stopUf = (id) => byId.get(id)?.properties.uf || "";
+const tripLine = (t) => t.rota && t.rota.length > 1 ? t.rota : t.paradas.map(p => byId.get(p.id).c);
+const lineKm = (t) => Math.round(t.paradas.reduce((s, p, i) => i ? s + d3.geoDistance(byId.get(t.paradas[i-1].id).c, byId.get(p.id).c) * 6371 : 0, 0));
+let UF_MESH = null;
+const ufMeshGeo = () => UF_MESH || (UF_MESH = topojson.mesh(topo, topoObj, (a, b) => a === b || a.properties.uf !== b.properties.uf));
+
+function normTrip(r){
+  return { id: r.id, nome: r.nome, inicio: r.inicio, fim: r.fim, status: r.status, paradas: r.paradas || [], caminho: r.caminho || [],
+    trechos: r.trechos || [], rota: r.rota || null, km: r.km, horas: r.horas != null ? +r.horas : null, notas: r.notas || "", criado_em: r.criado_em, concluida_em: r.concluida_em };
+}
+async function loadTrips(){
+  try { trips = JSON.parse(store.get(tKey()) || "[]"); } catch { trips = []; }
+  const { data, error } = await sb.from("viagens").select("*").eq("user_id", me.id).order("criado_em", { ascending: false });
+  if (!error){
+    const local = new Map(trips.filter(t => tripDirty.has(t.id)).map(t => [t.id, t]));
+    trips = data.map(r => local.get(r.id) || normTrip(r));
+    for (const [id, t] of local) if (!trips.some(x => x.id === id)) trips.unshift(t);
+    saveTripsLocal();
+  }
+  if (view === "viagens") renderTrips();
+  if (view === "conquistas") renderBadges();
+}
+
+/* gravação: cada mudança vai para o aparelho na hora e para o banco logo depois */
+function touchTrip(t, rerender = true){
+  tripDirty.add(t.id); saveTripsLocal();
+  clearTimeout(tripTimers.get(t.id)); tripTimers.set(t.id, setTimeout(() => pushTrip(t.id), 700));
+  if (rerender){ if (view === "viagens") renderTrips(); if (planning === t.id) paintPlan(); }
+}
+async function pushTrip(id){
+  const t = tripById(id); if (!t){ tripDirty.delete(id); return; }
+  const { error } = await sb.from("viagens").upsert({
+    id: t.id, user_id: me.id, nome: (t.nome || "").trim() || "Nova viagem", inicio: t.inicio || null, fim: t.fim || null, status: t.status,
+    paradas: t.paradas, caminho: t.caminho, trechos: t.trechos || [], rota: t.rota, km: t.km ?? null, horas: t.horas ?? null, notas: t.notas || null, concluida_em: t.concluida_em || null,
+  });
+  if (error && !error.code){ clearTimeout(tripTimers.get(id)); tripTimers.set(id, setTimeout(() => pushTrip(id), 15000)); return; }   // sem internet: tenta de novo
+  if (error){ console.warn(error); toast("Não consegui salvar a viagem. Tente de novo."); }
+  tripDirty.delete(id);
+}
+addEventListener("online", () => { for (const id of tripDirty) pushTrip(id); });
+
+/* ---------- operações ---------- */
+function newTrip(){
+  const t = { id: crypto.randomUUID(), nome: "Nova viagem", inicio: null, fim: null, status: "planejada", paradas: [], caminho: [], trechos: [], rota: null,
+    km: null, horas: null, notas: "", criado_em: new Date().toISOString(), concluida_em: null };
+  trips.unshift(t); tripSel = t.id; touchTrip(t);
+  setTimeout(() => { const n = $("tripNome"); if (n){ n.focus(); n.select(); } }, 60);
+}
+/* mudou o roteiro: o caminho pela estrada é recalculado sozinho em seguida */
+function invalidateRoute(t){ t.rota = null; t.caminho = []; t.trechos = []; t.km = null; t.horas = null; scheduleRoute(t); }
+function syncStatus(t){
+  if (t.status === "concluida" && t.paradas.length && t.paradas.every(p => p.feito)) return;
+  t.status = t.paradas.some(p => p.feito) ? "em_andamento" : "planejada"; t.concluida_em = null;
+}
+function addStop(t, id){
+  if (t.paradas.some(p => p.id === id)){ toast(`<b>${esc(stopName(id))}</b> já está no roteiro`); return false; }
+  if (t.paradas.length >= 150){ toast("Uma viagem pode ter até 150 paradas."); return false; }
+  t.paradas.push({ id, feito: false, data: null, criou: false });
+  invalidateRoute(t); syncStatus(t); touchTrip(t);
+  return true;
+}
+function removeStop(t, i){ t.paradas.splice(i, 1); invalidateRoute(t); syncStatus(t); touchTrip(t); }
+function moveStop(t, i, d){
+  const j = i + d; if (j < 0 || j >= t.paradas.length) return;
+  [t.paradas[i], t.paradas[j]] = [t.paradas[j], t.paradas[i]]; invalidateRoute(t); touchTrip(t);
+}
+/* Ela não voa: chegar a uma parada = ter passado por todas as cidades da estrada desde a parada anterior.
+   trechos[k] é o caminho entre a parada k e a parada k+1. */
+function markSegment(t, k, data){
+  const seg = (t.trechos || [])[k]; if (!seg) return 0;
+  let n = 0; seg.criadas = seg.criadas || [];
+  for (const id of seg.ids) if (!V[id]){ V[id] = { d: data, n: "" }; enqueue(id); seg.criadas.push(id); n++; }
+  return n;
+}
+function unmarkSegment(t, k){
+  const seg = (t.trechos || [])[k]; if (!seg || !seg.criadas?.length) return;
+  const manter = new Set();   // cidades que outro trecho concluído (ou uma parada concluída) também usa
+  t.trechos.forEach((x, j) => { if (j !== k && t.paradas[j + 1]?.feito) x.ids.forEach(id => manter.add(id)); });
+  t.paradas.forEach(p => { if (p.feito) manter.add(p.id); });
+  for (const id of seg.criadas) if (!manter.has(id) && V[id]){ delete V[id]; enqueue(id); }
+  seg.criadas = [];
+}
+function toggleStop(t, i){
+  const p = t.paradas[i]; if (!p) return;
+  const before = earned();
+  if (!p.feito){
+    p.feito = true; p.data = p.data || today();
+    if (!V[p.id]){ V[p.id] = { d: p.data, n: "" }; p.criou = true; enqueue(p.id); }
+    const via = i ? markSegment(t, i - 1, p.data) : 0;
+    paintAll();
+    if (t.paradas.every(x => x.feito)) return completeTrip(t, { auto: true, before });
+    t.status = "em_andamento"; touchTrip(t);
+    const nb = BADGES.find(b => earned().has(b.k) && !before.has(b.k));
+    toast(nb ? `Conquista desbloqueada: <b>${esc(badgeTitle(nb))}</b>`
+      : `<b>${esc(stopName(p.id))}</b> concluída${via ? `, com mais <b>${fmtN(via)}</b> ${via === 1 ? "cidade" : "cidades"} do caminho` : ""}. Boa estrada!`, 3800);
+  } else {
+    p.feito = false;
+    if (i) unmarkSegment(t, i - 1);
+    if (p.criou && V[p.id]){ delete V[p.id]; enqueue(p.id); }   // só desfaz o que esta viagem acrescentou
+    p.criou = false; p.data = null;
+    syncStatus(t); paintAll(); touchTrip(t);
+  }
+}
+function finishTrip(t, data, before){
+  for (const p of t.paradas){
+    if (!p.feito){ p.feito = true; p.data = data; }
+    if (!V[p.id]){ V[p.id] = { d: p.data || data, n: "" }; p.criou = true; enqueue(p.id); }
+  }
+  (t.trechos || []).forEach((_, k) => markSegment(t, k, t.paradas[k + 1]?.data || data));
+  t.status = "concluida"; t.concluida_em = new Date().toISOString();
+  const daViagem = t.paradas.filter(p => p.criou).length + (t.trechos || []).reduce((n, x) => n + (x.criadas?.length || 0), 0);
+  paintAll(); touchTrip(t);
+  burst(innerWidth / 2, innerHeight / 3);
+  const nb = BADGES.filter(b => earned().has(b.k) && !before.has(b.k));
+  toast(daViagem
+    ? `Viagem concluída! <b>${fmtN(daViagem)}</b> ${daViagem === 1 ? "cidade nova" : "cidades novas"} no seu mapa com esta viagem${nb.length ? ` · conquista: <b>${esc(badgeTitle(nb[0]))}</b>` : ""}`
+    : `Viagem concluída!${nb.length ? ` Conquista: <b>${esc(badgeTitle(nb[0]))}</b>` : " Todas as cidades já estavam no seu mapa."}`, 5200);
+}
+async function completeTrip(t, { auto = false, before = earned() } = {}){
+  // sem o caminho pela estrada não dá para saber por onde ela passou: calcula antes de concluir
+  if (t.paradas.length > 1 && !(t.trechos || []).length){
+    toast("Calculando o caminho pela estrada…");
+    const ok = await traceRoad(t);
+    if (!ok){
+      modal({ title: "Não consegui calcular o caminho",
+        body: `<p style="margin:0">O serviço de rotas não respondeu agora, então ainda não sei por quais cidades a estrada passa entre as paradas.</p><p class="muted" style="margin:0">Dá para tentar de novo daqui a pouco ou concluir agora só com as paradas.</p>`,
+        actions: [{ label: "Tentar depois", cls: "ghost", onClick: () => { if (auto){ t.status = "em_andamento"; touchTrip(t); } } },
+                  { label: "Concluir só com as paradas", onClick: () => finishTrip(t, today(), before) }] });
+      return;
+    }
+  }
+  if (auto) return finishTrip(t, today(), before);
+  const falta = t.paradas.filter(p => !p.feito).length;
+  const via = (t.caminho || []).length, viaNovas = (t.caminho || []).filter(id => !V[id]).length;
+  const hoje = today(), dataPadrao = t.fim && t.fim < hoje ? t.fim : hoje;
+  modal({
+    title: `Concluir “${t.nome}”?`,
+    body: `<p style="margin:0">${falta ? `As <b>${fmtN(falta)}</b> paradas que faltam serão marcadas como concluídas.` : "Todas as paradas já estão concluídas."}
+      ${via ? ` Também entram no seu mapa as <b>${fmtN(via)}</b> cidades por onde a estrada passa${viaNovas ? ` (${fmtN(viaNovas)} novas)` : ""}.` : ""}</p>
+      <label class="field"><span>Data da viagem</span><input class="input" type="date" id="ctData" value="${dataPadrao}" max="${hoje}"></label>`,
+    actions: [
+      { label: "Cancelar", cls: "ghost" },
+      { label: "Concluir viagem", onClick: () => finishTrip(t, $("ctData").value || hoje, before) },
+    ],
+  });
+}
+function reopenTrip(t){ t.status = "em_andamento"; t.concluida_em = null; touchTrip(t); toast("Viagem reaberta. As cidades continuam no seu mapa."); }
+function deleteTrip(t){
+  modal({ title: `Excluir “${t.nome}”?`,
+    body: `<p style="margin:0">O roteiro é apagado. As cidades que já entraram no seu mapa continuam lá.</p>`,
+    actions: [{ label: "Cancelar", cls: "ghost" }, { label: "Excluir viagem", cls: "danger", onClick: async () => {
+      trips = trips.filter(x => x.id !== t.id); tripDirty.delete(t.id); clearTimeout(tripTimers.get(t.id)); saveTripsLocal();
+      if (tripSel === t.id) tripSel = trips[0]?.id || null;
+      renderTrips();
+      const { error } = await sb.from("viagens").delete().eq("id", t.id);
+      if (error) toast("A viagem saiu daqui, mas não consegui apagar no servidor."); else toast("Viagem excluída.");
+    }}] });
+}
+
+/* "Organizar o caminho": menor percurso em linha reta, mantendo a primeira parada como partida */
+function organizeRoute(t){
+  const n = t.paradas.length;
+  if (n < 3){ toast("Coloque pelo menos 3 paradas para organizar o caminho."); return; }
+  const c = t.paradas.map(p => byId.get(p.id).c), D = (a, b) => d3.geoDistance(c[a], c[b]);
+  const order = [0], left = new Set([...Array(n).keys()].slice(1));
+  while (left.size){
+    const last = order[order.length - 1]; let best = -1, bd = Infinity;
+    for (const j of left){ const d = D(last, j); if (d < bd){ bd = d; best = j; } }
+    order.push(best); left.delete(best);
+  }
+  let improved = true, guard = 0;
+  while (improved && guard++ < 300){
+    improved = false;
+    for (let i = 1; i < n - 1; i++) for (let k = i + 1; k < n; k++){
+      const a = order[i - 1], b = order[i], cc = order[k], dd = k + 1 < n ? order[k + 1] : null;
+      const antes = D(a, b) + (dd != null ? D(cc, dd) : 0), depois = D(a, cc) + (dd != null ? D(b, dd) : 0);
+      if (depois < antes - 1e-12){ order.splice(i, k - i + 1, ...order.slice(i, k + 1).reverse()); improved = true; }
+    }
+  }
+  const kmAntes = lineKm(t);
+  t.paradas = order.map(i => t.paradas[i]); invalidateRoute(t); touchTrip(t);
+  const kmDepois = lineKm(t);
+  toast(kmDepois < kmAntes ? `Caminho organizado: <b>${fmtN(kmDepois)} km</b> em linha reta (antes eram ${fmtN(kmAntes)} km)` : "O caminho já estava na melhor ordem.", 4200);
+}
+
+/* "Traçar pela estrada": rota real (OSRM) + cidades por onde a estrada passa */
+function simplifyLine(pts, tol){
+  if (pts.length < 3) return pts.slice();
+  const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length){
+    const [a, b] = stack.pop(); let idx = -1, max = tol;
+    const [ax, ay] = pts[a], [bx, by] = pts[b], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1e-12;
+    for (let i = a + 1; i < b; i++){
+      const [px, py] = pts[i]; let u = ((px - ax) * dx + (py - ay) * dy) / L; u = Math.max(0, Math.min(1, u));
+      const ex = ax + u * dx - px, ey = ay + u * dy - py, d = Math.sqrt(ex * ex + ey * ey);
+      if (d > max){ max = d; idx = i; }
+    }
+    if (idx > 0){ keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+let grid = null;
+function buildGrid(){
+  grid = new Map();
+  feats.forEach((f, i) => {
+    const [[x0, y0], [x1, y1]] = d3.geoBounds(f); f.bb = [x0, y0, x1, y1];
+    for (let x = Math.floor(x0); x <= Math.floor(x1); x++) for (let y = Math.floor(y0); y <= Math.floor(y1); y++){
+      const k = x * 1000 + y; let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i);
+    }
+  });
+}
+function municipioEm(pt, hint){
+  if (hint != null && d3.geoContains(feats[hint], pt)) return hint;
+  for (const i of grid.get(Math.floor(pt[0]) * 1000 + Math.floor(pt[1])) || []){
+    const b = feats[i].bb;
+    if (pt[0] < b[0] || pt[0] > b[2] || pt[1] < b[1] || pt[1] > b[3]) continue;
+    if (d3.geoContains(feats[i], pt)) return i;
+  }
+  return null;
+}
+function municipiosNaLinha(line){
+  if (!grid) buildGrid();
+  const STEP = .008, out = [], seen = new Set();   // ~1 km entre amostras
+  let hint = null, acc = STEP;
+  const visit = (pt) => { const i = municipioEm(pt, hint); if (i == null) return; hint = i; const id = feats[i].id; if (!seen.has(id)){ seen.add(id); out.push(id); } };
+  for (let s = 0; s < line.length; s++){
+    if (s === 0){ visit(line[0]); continue; }
+    const [x0, y0] = line[s - 1], [x1, y1] = line[s], L = Math.hypot(x1 - x0, y1 - y0);
+    if (L > STEP){ const n = Math.ceil(L / STEP); for (let k = 1; k <= n; k++) visit([x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n]); acc = 0; }
+    else { acc += L; if (acc >= STEP){ visit(line[s]); acc = 0; } }
+  }
+  return out;
+}
+const routeTimers = new Map();
+function scheduleRoute(t, delay = 900){
+  clearTimeout(routeTimers.get(t.id));
+  if (t.paradas.length < 2){ t._rota = null; return; }
+  t._rota = "calculando";
+  routeTimers.set(t.id, setTimeout(() => traceRoad(t), delay));
+}
+function renderIfOpen(t){ if (view === "viagens" && tripSel === t.id) renderTrips(); if (planning === t.id) paintPlan(); }
+/* a linha da OSRM passa exatamente pelas paradas: corta nelas para ter um trecho entre cada par */
+function splitAtWaypoints(line, wps){
+  const cuts = [0]; let from = 0;
+  for (let w = 1; w < wps.length - 1; w++){
+    const [wx, wy] = wps[w]; let best = from, bd = Infinity;
+    for (let j = from; j < line.length; j++){
+      const d = Math.hypot(line[j][0] - wx, line[j][1] - wy);
+      if (d < bd){ bd = d; best = j; }
+      if (d < 1e-5) break;
+    }
+    cuts.push(best); from = best;
+  }
+  cuts.push(line.length - 1);
+  return cuts.slice(1).map((c, i) => line.slice(cuts[i], c + 1));
+}
+async function traceRoad(t, { manual = false } = {}){
+  clearTimeout(routeTimers.get(t.id));
+  if (t.paradas.length < 2){ t._rota = null; return true; }
+  if (t.paradas.length > 90){ t._rota = "erro"; t._rotaMsg = "Para calcular o caminho pela estrada, use até 90 paradas."; renderIfOpen(t); return false; }
+  const sig = t.paradas.map(p => p.id).join(","), mesmo = () => sig === t.paradas.map(p => p.id).join(",");
+  t._rota = "calculando"; renderIfOpen(t);
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const coords = t.paradas.map(p => byId.get(p.id).c.map(v => v.toFixed(5)).join(",")).join(";");
+    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`, { signal: ctrl.signal });
+    const j = await r.json();
+    if (!r.ok || j.code !== "Ok" || !j.routes?.length) throw new Error(j.message || j.code || String(r.status));
+    if (!mesmo()) return false;                       // o roteiro mudou durante o cálculo: vale o próximo
+    const rt = j.routes[0], line = rt.geometry.coordinates;
+    const legs = splitAtWaypoints(line, j.waypoints.map(w => w.location));
+    const paradas = new Set(t.paradas.map(p => p.id)), antigos = t.trechos || [];
+    t.trechos = legs.map((leg, k) => ({ ids: municipiosNaLinha(leg).filter(id => !paradas.has(id)), criadas: antigos[k]?.criadas || [] }));
+    t.caminho = [...new Set(t.trechos.flatMap(x => x.ids))].slice(0, 3000);
+    let simples = simplifyLine(line, .01); if (simples.length > 2000) simples = simplifyLine(line, .04);
+    t.rota = simples.map(([x, y]) => [+x.toFixed(4), +y.toFixed(4)]);
+    t.km = Math.round(rt.distance / 1000); t.horas = Math.round(rt.duration / 360) / 10;
+    t._rota = "ok"; t._rotaMsg = "";
+    // trechos que chegam a paradas já concluídas: ela já passou por eles
+    let extra = 0;
+    t.paradas.forEach((p, i) => { if (i && p.feito) extra += markSegment(t, i - 1, p.data || today()); });
+    if (extra) paintAll();
+    touchTrip(t);
+    if (manual) toast(`Caminho recalculado: <b>${fmtN(t.km)} km</b> pela estrada, passando por <b>${fmtN(t.caminho.length)}</b> cidades`, 4200);
+    return true;
+  } catch (e){
+    console.warn("rota", e);
+    if (mesmo()){
+      t._rota = "erro"; t._rotaMsg = "Não consegui calcular o caminho pela estrada agora."; renderIfOpen(t);
+      if (!manual) setTimeout(() => { if (t._rota === "erro" && mesmo()) traceRoad(t); }, 30000);   // tenta de novo sozinho
+    }
+    return false;
+  } finally { clearTimeout(timer); }
+}
+
+/* ---------- tela "Viagens" ---------- */
+const ICON_ROUTE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7.5a3.5 3.5 0 0 0 0-7h-7a3.5 3.5 0 0 1 0-7H16"/></svg>';
+function tripMeta(t){
+  const n = t.paradas.length, bits = [`${n} ${n === 1 ? "parada" : "paradas"}`];
+  if (t.km) bits.push(`${fmtN(t.km)} km`); else if (n > 1) bits.push(`${fmtN(lineKm(t))} km em linha reta`);
+  if (t.inicio) bits.push(fmtDate(t.inicio).slice(0, 5) + (t.fim ? " a " + fmtDate(t.fim).slice(0, 5) : ""));
+  return bits.join(" · ");
+}
+function renderTrips(){
+  if (!feats.length){ geoReady.then(renderTrips).catch(() => {}); return; }
+  const cards = $("tripCards");
+  if (!trips.length){
+    cards.innerHTML = "";
+    $("tripDetail").innerHTML = `<div class="empty trip-empty">${ICON_ROUTE}<b>Planeje sua próxima viagem</b><span>Escolha as cidades, organize o caminho e, quando voltar, marque tudo de uma vez.</span><button class="btn" type="button" id="tripNew2">+ Criar minha primeira viagem</button></div>`;
+    $("tripNew2").onclick = newTrip;
+    return;
+  }
+  if (!tripById(tripSel)) tripSel = trips[0].id;
+  cards.innerHTML = trips.map(t => {
+    const n = t.paradas.length, done = t.paradas.filter(p => p.feito).length;
+    return `<button class="tcard ${t.id === tripSel ? "on" : ""}" data-id="${t.id}" type="button">
+      <span class="tstatus s-${t.status}">${STATUS[t.status]}</span><b>${esc(t.nome)}</b><small>${esc(tripMeta(t))}</small>
+      <span class="bar"><i style="width:${n ? (done / n * 100).toFixed(1) : 0}%"></i></span></button>`;
+  }).join("");
+  cards.querySelectorAll(".tcard").forEach(b => b.onclick = () => {
+    tripSel = b.dataset.id; renderTrips();
+    if (matchMedia("(max-width:900px)").matches) $("tripDetail").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  renderTripDetail(tripById(tripSel));
+}
+function renderTripDetail(t){
+  // o caminho pode terminar de ser calculado enquanto ela digita: guarda o que está sendo digitado e o cursor
+  const ae = document.activeElement, focoId = ae && ["tripNome", "tripNotas", "tripAdd"].includes(ae.id) ? ae.id : null;
+  const cursor = focoId ? [ae.selectionStart, ae.selectionEnd] : null, digitando = $("tripAdd")?.value || "";
+  const n = t.paradas.length, done = t.paradas.filter(p => p.feito).length;
+  const novas = t.paradas.filter(p => !V[p.id]).length + t.caminho.filter(id => !V[id]).length;
+  const km = n < 2 ? ""
+    : t._rota === "erro" ? `<span class="warn">${esc(t._rotaMsg || "Caminho pela estrada não calculado.")} <button type="button" class="linkbtn" id="tripRetry">Tentar de novo</button></span>`
+    : (t.trechos || []).length && t.km ? `<span><b>${fmtN(t.km)} km</b> pela estrada${t.horas ? ` · ≈ ${String(t.horas).replace(".", ",")} h` : ""}</span>`
+    : `<span class="busy">Calculando o caminho pela estrada…</span>`;
+  const prevKm = (i) => i ? Math.round(d3.geoDistance(byId.get(t.paradas[i - 1].id).c, byId.get(t.paradas[i].id).c) * 6371) : 0;
+  $("tripDetail").innerHTML = `
+    <div class="tdet-h">
+      <input class="tname" id="tripNome" maxlength="60" value="${esc(t.nome)}" aria-label="Nome da viagem">
+      <span class="tstatus s-${t.status}">${STATUS[t.status]}</span>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>Saída</span><input class="input" type="date" id="tripIni" value="${esc(t.inicio || "")}"></label>
+      <label class="field"><span>Volta</span><input class="input" type="date" id="tripFim" value="${esc(t.fim || "")}"></label>
+    </div>
+    <div class="tprev"><canvas id="tripCanvas" aria-label="Prévia do roteiro"></canvas>
+      <button class="pill" type="button" id="tripMapBtn">${ico("map", 16)} Escolher cidades no mapa</button></div>
+    <div class="tsum">
+      <span><b>${n}</b> ${n === 1 ? "parada" : "paradas"}</span>${km}
+      ${t.caminho.length ? `<span><b>+${fmtN(t.caminho.length)}</b> no caminho</span>` : ""}
+      ${novas ? `<span class="hot"><b>${fmtN(novas)}</b> ${novas === 1 ? "cidade nova" : "cidades novas"} para o mapa</span>` : ""}
+    </div>
+    <div class="tadd citypick"><input class="input" id="tripAdd" autocomplete="off" placeholder="Adicionar parada: digite o nome da cidade"><ul id="tripAddRes" hidden></ul></div>
+    <div class="btnrow tools">
+      <button class="btn ghost sm" type="button" id="tripOrg" ${n < 3 ? "disabled" : ""}>Organizar o caminho</button>
+      <button class="btn ghost sm" type="button" id="tripRoad" ${n < 2 ? "disabled" : ""}>Recalcular caminho</button>
+    </div>
+    ${n ? `<ol class="stops">${t.paradas.map((p, i) => `
+      <li class="tstop ${p.feito ? "done" : ""}">
+        <button type="button" class="chk" data-a="tog" data-i="${i}" aria-pressed="${p.feito}" aria-label="${p.feito ? "Desmarcar" : "Marcar"} ${esc(stopName(p.id))} como concluída"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+        <span class="sn">${i + 1}</span>
+        <span class="sname"><b>${esc(stopName(p.id))}</b><span class="uf">${stopUf(p.id)}</span>
+          <small>${i ? `+${fmtN(prevKm(i))} km${(t.trechos || [])[i - 1]?.ids.length ? ` · ${fmtN(t.trechos[i - 1].ids.length)} cidades no caminho` : ""}` : "Partida"}${p.feito && p.data ? ` · concluída em ${fmtDate(p.data)}` : !p.feito && V[p.id] ? " · você já passou aqui" : ""}</small></span>
+        <span class="sacts">
+          <button type="button" data-a="up" data-i="${i}" ${i ? "" : "disabled"} aria-label="Subir">↑</button>
+          <button type="button" data-a="down" data-i="${i}" ${i < n - 1 ? "" : "disabled"} aria-label="Descer">↓</button>
+          <button type="button" data-a="del" data-i="${i}" aria-label="Tirar do roteiro">✕</button>
+        </span>
+      </li>`).join("")}</ol>`
+    : `<div class="hint">Comece adicionando a cidade de partida. Dá para buscar pelo nome aqui em cima ou tocar no mapa.</div>`}
+    ${t.caminho.length ? `<details class="via"><summary>${fmtN(t.caminho.length)} cidades no caminho pela estrada</summary>
+      <div class="via-list">${t.caminho.map(id => `<span class="${V[id] ? "seen" : ""}">${esc(stopName(id))} <i>${stopUf(id)}</i></span>`).join("")}</div></details>` : ""}
+    <label class="field"><span>Anotações da viagem</span><textarea class="input" id="tripNotas" rows="3" maxlength="1000" placeholder="Hotéis, postos, amigos para visitar…">${esc(t.notas || "")}</textarea></label>
+    <div class="tfoot">
+      ${t.status === "concluida"
+        ? `<button class="btn ghost" type="button" id="tripReopen">Reabrir viagem</button>`
+        : `<button class="btn" type="button" id="tripDone" ${n ? "" : "disabled"}>${done && done < n ? `Concluir viagem (${done}/${n})` : "Concluir viagem"}</button>`}
+      <button class="btn ghost danger-text" type="button" id="tripDel">Excluir</button>
+    </div>`;
+  // campos que não redesenham a tela (para não perder o foco ao digitar)
+  const cardOf = () => $("tripCards").querySelector(`.tcard[data-id="${t.id}"]`);
+  $("tripNome").oninput = (e) => { t.nome = e.target.value.slice(0, 60); const c = cardOf(); if (c) c.querySelector("b").textContent = t.nome || "Nova viagem"; touchTrip(t, false); };
+  $("tripNotas").oninput = (e) => { t.notas = e.target.value.slice(0, 1000); touchTrip(t, false); };
+  $("tripIni").onchange = (e) => { t.inicio = e.target.value || null; touchTrip(t); };
+  $("tripFim").onchange = (e) => { t.fim = e.target.value || null; touchTrip(t); };
+  cityPicker($("tripAdd"), $("tripAddRes"), (id) => {
+    const el = $("tripAdd"); if (el) el.value = "";
+    if (addStop(t, id)) toast(`<b>${esc(stopName(id))}</b> entrou como parada ${t.paradas.length}`);
+    setTimeout(() => $("tripAdd")?.focus(), 30);
+  });
+  if (digitando) $("tripAdd").value = digitando;
+  if (focoId){
+    const el = $(focoId); el.focus();
+    try { if (cursor && cursor[0] != null) el.setSelectionRange(cursor[0], cursor[1]); } catch {}
+    if (focoId === "tripAdd" && digitando) el.dispatchEvent(new Event("input"));   // reabre a lista de sugestões
+  }
+  $("tripMapBtn").onclick = () => startPlanning(t.id);
+  $("tripCanvas").onclick = () => startPlanning(t.id);
+  $("tripOrg").onclick = () => organizeRoute(t);
+  $("tripRoad").onclick = () => traceRoad(t, { manual: true });
+  $("tripRetry")?.addEventListener("click", () => traceRoad(t, { manual: true }));
+  if (n >= 2 && !(t.trechos || []).length && !t._rota) scheduleRoute(t, 300);   // viagem salva sem caminho: calcula agora
+  $("tripDone")?.addEventListener("click", () => completeTrip(t));
+  $("tripReopen")?.addEventListener("click", () => reopenTrip(t));
+  $("tripDel").onclick = () => deleteTrip(t);
+  $("tripDetail").querySelectorAll(".stops [data-a]").forEach(b => b.onclick = () => {
+    const i = +b.dataset.i;
+    if (b.dataset.a === "tog") toggleStop(t, i);
+    if (b.dataset.a === "up") moveStop(t, i, -1);
+    if (b.dataset.a === "down") moveStop(t, i, 1);
+    if (b.dataset.a === "del") removeStop(t, i);
+  });
+  requestAnimationFrame(() => drawTripPreview(t, $("tripCanvas")));
+}
+/* prévia: estados, cidades do caminho, rota e paradas numeradas */
+function drawTripPreview(t, cv){
+  if (!cv) return;
+  const box = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2), W = box.width, H = box.height;
+  if (!W || !H) return;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.documentElement), cor = (v) => css.getPropertyValue(v).trim();
+  ctx.fillStyle = cor("--sea"); ctx.fillRect(0, 0, W, H);
+  const line = t.paradas.length ? tripLine(t) : null;
+  let foco = { type: "FeatureCollection", features: feats };
+  if (line){
+    const xs = line.map(p => p[0]), ys = line.map(p => p[1]);
+    const padX = Math.max(1.2, (Math.max(...xs) - Math.min(...xs)) * .25), padY = Math.max(1.2, (Math.max(...ys) - Math.min(...ys)) * .25);
+    foco = { type: "LineString", coordinates: [[Math.min(...xs) - padX, Math.min(...ys) - padY], [Math.max(...xs) + padX, Math.max(...ys) + padY]] };
+  }
+  const pr = d3.geoMercator().fitExtent([[14, 14], [W - 14, H - 14]], foco), gp = d3.geoPath(pr, ctx);
+  ctx.fillStyle = cor("--land"); ctx.beginPath(); gp({ type: "FeatureCollection", features: feats }); ctx.fill();
+  ctx.fillStyle = cor("--accent"); ctx.globalAlpha = .55;
+  for (const id in V){ const f = byId.get(id); if (f){ ctx.beginPath(); gp(f); ctx.fill(); } }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = cor("--road"); ctx.globalAlpha = .45;
+  for (const id of t.caminho){ ctx.beginPath(); gp(byId.get(id)); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = cor("--uf-stroke"); ctx.lineWidth = 1; ctx.beginPath(); gp(ufMeshGeo()); ctx.stroke();
+  if (!line) return;
+  if (line.length > 1){
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(20,30,26,.35)"; ctx.lineWidth = 6; ctx.beginPath(); gp({ type: "LineString", coordinates: line }); ctx.stroke();
+    ctx.strokeStyle = cor("--road"); ctx.lineWidth = 2.5; ctx.setLineDash(t.rota ? [7, 6] : [2, 6]); ctx.beginPath(); gp({ type: "LineString", coordinates: line }); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.font = '800 11px "Barlow Condensed", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  t.paradas.forEach((p, i) => {
+    const [x, y] = pr(byId.get(p.id).c);
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fillStyle = p.feito ? cor("--good") : cor("--road"); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke();
+    ctx.fillStyle = p.feito ? "#fff" : "#1B2521"; ctx.fillText(String(i + 1), x, y + .5);
+  });
+}
+
+/* ---------- modo planejamento no mapa principal ---------- */
+function startPlanning(id){
+  const t = tripById(id); if (!t) return;
+  if (other) endCompare();
+  closeCard(); quick = false; $("quick").setAttribute("aria-pressed", false);
+  planning = id; showView("mapa");
+  $("planBar").hidden = false; $("quick").hidden = true;
+  $("legend").innerHTML = `<span><i class="sw s"></i>Parada</span><span><i class="sw c"></i>No caminho</span><span><i class="sw v"></i>Já passei</span>`;
+  $("planTxt").innerHTML = `Planejando <b>${esc(t.nome)}</b>: toque nas cidades para incluir ou tirar do roteiro`;
+  paintPlan();
+  afterLayout(() => {
+    drawTripOverlay();
+    if (t.paradas.length){ const l = tripLine(t); flyTo({ type: "LineString", coordinates: l.length > 1 ? l : [l[0], l[0]] }, 12); }
+  });
+}
+function endPlanning(goBack = true){
+  const id = planning; planning = null; $("planBar").hidden = true; $("quick").hidden = isAdmin(); resetLegend();
+  paintAll(); drawTripOverlay();
+  if (goBack && id){ tripSel = id; showView("viagens"); }
+}
+function planToggle(id){
+  const t = tripById(planning); if (!t) return;
+  const i = t.paradas.findIndex(p => p.id === id);
+  if (i >= 0){ removeStop(t, i); toast(`<b>${esc(stopName(id))}</b> saiu do roteiro`); }
+  else if (addStop(t, id)) toast(`<b>${esc(stopName(id))}</b> entrou como parada ${t.paradas.length}`);
+}
+function paintPlan(){ paintAll(); drawTripOverlay(); }
+function renderPlanSide(){
+  const t = tripById(planning); if (!t) return;
+  $("sideH").textContent = `Paradas da viagem · ${t.paradas.length}`;
+  $("ufList").innerHTML = (t.paradas.length ? "" : `<div class="hint">Toque numa cidade do mapa para ela entrar no roteiro. Toque de novo para tirar.</div>`) +
+    t.paradas.map((p, i) => `<div class="row plan-row"><span class="sn">${i + 1}</span><span><div class="nm">${esc(stopName(p.id))}</div><small class="muted">${stopUf(p.id)}${i ? ` · +${fmtN(Math.round(d3.geoDistance(byId.get(t.paradas[i - 1].id).c, byId.get(p.id).c) * 6371))} km` : " · partida"}</small></span>
+      <button class="x-btn" type="button" data-i="${i}" aria-label="Tirar ${esc(stopName(p.id))} do roteiro">✕</button></div>`).join("");
+  $("ufList").querySelectorAll(".x-btn").forEach(b => b.onclick = () => removeStop(t, +b.dataset.i));
+}
+let routeBase, routeDash, gMarks;
+/* o mapa só ganha tamanho quando fica visível; espera a medida antes de desenhar */
+function afterLayout(fn, tries = 30){
+  if (W && typeof path === "function") return fn();
+  if (mapLayout) mapLayout();
+  if (W && typeof path === "function") return fn();
+  if (tries > 0) setTimeout(() => afterLayout(fn, tries - 1), 100);
+}
+function drawTripOverlay(){
+  if (!mapReady || !routeBase || typeof path !== "function" || typeof proj !== "function") return;
+  const t = planning ? tripById(planning) : null;
+  if (!t || !t.paradas.length){ routeBase.attr("d", null); routeDash.attr("d", null); gMarks.selectAll("*").remove(); return; }
+  const d = t.paradas.length > 1 ? path({ type: "LineString", coordinates: tripLine(t) }) : null;
+  routeBase.attr("d", d); routeDash.attr("d", d).classed("reta", !t.rota);
+  const sel = gMarks.selectAll("g.mk").data(t.paradas.map((p, i) => ({ p, i, xy: proj(byId.get(p.id).c) })), d => d.p.id);
+  sel.exit().remove();
+  const ent = sel.enter().append("g").attr("class", "mk");
+  ent.append("circle").attr("r", 11); ent.append("text");
+  sel.merge(ent).classed("feito", d => d.p.feito).each(function(d){ d3.select(this).select("text").text(d.i + 1); });
+  placeMarks();
+}
+function placeMarks(){
+  if (!gMarks) return;
+  gMarks.selectAll("g.mk").attr("transform", d => { const [x, y] = curT.apply(d.xy); return `translate(${x},${y})`; });
+}
+$("tripNew").onclick = newTrip;
+$("planDone").onclick = () => endPlanning(true);
 
 /* ---------- ranking ---------- */
 const rf = { genero: "", periodo: "" };
