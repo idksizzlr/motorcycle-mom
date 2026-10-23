@@ -2,7 +2,7 @@
 
 Mapa interativo dos 5.570 municípios do Brasil para marcar as cidades por onde você já passou de moto.
 
-**Quem usa** vê: Mapa, Diário, Conquistas, Ranking e Perfil.
+**Quem usa** vê: Mapa, Diário, Viagens (planejar roteiros; o caminho pela estrada é calculado sozinho e, ao concluir, todas as cidades atravessadas entram no mapa), Conquistas, Ranking e Perfil.
 **Quem administra** vê outro site: Visão geral (números e gráficos), Usuários (editar, redefinir senha, ver mapa, excluir),
 Mapa geral (por onde a turma toda já passou), Ranking e Conta. Admins não aparecem no ranking nem nas estatísticas.
 
