@@ -11,8 +11,8 @@ Mapa geral (por onde a turma toda já passou), Ranking e Conta. Admins não apar
 | Parte | Onde roda |
 |---|---|
 | Site (HTML/CSS/JS puro, sem build) | Vercel |
-| Login, contas e banco de dados | Supabase (projeto `por-onde-rodei`, região São Paulo) |
-| Cron diário que evita a pausa do Supabase grátis | Vercel Cron → `api/keepalive.js` |
+| Login, contas e banco de dados | Supabase (organização "Mami", projeto `cmqltjsaivvlfgthikrp`) |
+| Despertador diário que evita a pausa do Supabase grátis | Vercel Cron (`api/keepalive.js`) e GitHub Actions (`.github/workflows/keepalive.yml`) |
 
 ```
 index.html            estrutura das telas

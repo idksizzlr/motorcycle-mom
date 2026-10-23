@@ -316,10 +316,28 @@ addEventListener("online", () => flush());
 /* =====================================================================
    Entrada / cadastro
    ===================================================================== */
+/* Em out/2026 o banco mudou de servidor (o projeto antigo do Supabase travou).
+   As contas precisam ser criadas de novo, mas as cidades guardadas no navegador podem ser trazidas. */
+const OLD_REF = "oattcftnzhragczslhoq";
+function oldDeviceCopies(exceptId){
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i), m = /^por:(.+):visitas$/.exec(k || "");
+      if (!m || m[1] === exceptId) continue;
+      const v = JSON.parse(localStorage.getItem(k) || "{}"), n = Object.keys(v).length;
+      if (n) out.push({ key: k, v, n });
+    }
+  } catch {}
+  return out.sort((a, b) => b.n - a.n);
+}
 function showAuth(){
   $("boot").hidden = true; $("app").hidden = true; $("auth").hidden = false;
   if (location.hash) history.replaceState(null, "", location.pathname + location.search);
   document.title = "Por Onde Rodei";
+  const mudou = store.get("por:mudanca:ok") == null && (store.get(`sb-${OLD_REF}-auth-token`) != null || oldDeviceCopies().length > 0);
+  $("moveNote").hidden = !mudou;
+  if (mudou){ $("tabLogin").setAttribute("aria-selected", false); $("tabSignup").setAttribute("aria-selected", true); $("loginForm").hidden = true; $("signupForm").hidden = false; }
   startHero();
 }
 
@@ -593,6 +611,7 @@ async function enterApp(user, fresh = false){
     for (const [id, it] of Object.entries(Q)){ if (it.op === "up") nv[id] = { d: it.d || "", n: it.n || "" }; else delete nv[id]; }
     V = nv; saveLocal();
   } else setSync("off");
+  store.set("por:mudanca:ok", "1"); store.del(`sb-${OLD_REF}-auth-token`);
   $("boot").hidden = true; $("auth").hidden = true; $("app").hidden = false;
   applyRole();
   renderMe();
@@ -605,6 +624,10 @@ async function enterApp(user, fresh = false){
   }
   if (isAdmin()) loadAdmin();
   flush();
+  if (!isAdmin() && !Object.keys(V).length && !store.get(`por:${me.id}:recuperacao`)){
+    const c = oldDeviceCopies(me.id)[0];
+    if (c){ offerRecovery(c); return; }
+  }
   if (fresh) toast(`Bem-${g3(profile,"vinda","vindo","vindo(a)")}, <b>${esc(profile.nome)}</b>! Toque numa cidade para começar.`, 4200);
 }
 
@@ -1107,6 +1130,9 @@ function fillProfile(){
   $("pfEstilo").value = profile.estilo; $("pfMoto").value = profile.moto || ""; $("pfDesde").value = profile.pilota_desde || "";
   $("pfRanking").checked = profile.aparece_ranking; pfCity.set(profile.cidade_id);
   $("pfErr").textContent = ""; $("pwErr").textContent = "";
+  const c = store.get(`por:${me.id}:recuperacao`) === "feito" ? null : oldDeviceCopies(me.id)[0];
+  $("recBtn").hidden = !c;
+  if (c) $("recBtn").textContent = `Trazer ${fmtN(c.n)} cidades guardadas neste aparelho`;
   renderPassport();
 }
 function renderPassport(){
@@ -1150,22 +1176,44 @@ $("delMeBtn").onclick = () => modal({
     store.del(vKey()); store.del(qKey()); await sb.auth.signOut();
   }}],
 });
+function mergeCopy(src){
+  let added = 0;
+  for (const [id, val] of Object.entries(src)){
+    if (!byId.has(id) || V[id]) continue;
+    V[id] = { d: /^\d{4}-\d{2}-\d{2}$/.test(val?.d || "") ? val.d : "", n: String(val?.n || "").slice(0, 280) };
+    Q[id] = { op: "up", d: V[id].d || null, n: V[id].n || null }; added++;
+  }
+  saveLocal(); flush(); paintAll();
+  return added;
+}
 $("impFile").onchange = async (e) => {
   const file = e.target.files[0]; if (!file) return;
   try {
     const d = JSON.parse(await file.text()); const src = d?.v;
     if (!src || typeof src !== "object") throw 0;
-    let added = 0;
-    for (const [id, val] of Object.entries(src)){
-      if (!byId.has(id) || V[id]) continue;
-      V[id] = { d: /^\d{4}-\d{2}-\d{2}$/.test(val?.d || "") ? val.d : "", n: String(val?.n || "").slice(0, 280) };
-      Q[id] = { op: "up", d: V[id].d || null, n: V[id].n || null }; added++;
-    }
-    saveLocal(); flush(); paintAll();
-    toast(`Cópia importada: <b>${added}</b> cidades novas na sua conta`, 4000);
+    toast(`Cópia importada: <b>${mergeCopy(src)}</b> cidades novas na sua conta`, 4000);
   } catch { toast("Esse arquivo não é uma cópia do Por Onde Rodei", 3500); }
   e.target.value = "";
 };
+/* cidades que ficaram guardadas neste navegador antes da mudança de servidor */
+async function recoverFromDevice(c){
+  await geoReady.catch(() => {});
+  const added = mergeCopy(c.v);
+  store.set(`por:${me.id}:recuperacao`, "feito");
+  if (view === "perfil") fillProfile();
+  burst(innerWidth / 2, innerHeight / 3);
+  toast(`Pronto! <b>${fmtN(added)}</b> cidades de volta na sua conta`, 4500);
+}
+function offerRecovery(c){
+  modal({ title: "Achamos suas cidades!",
+    body: `<p style="margin:0">Este navegador guardou <b>${fmtN(c.n)} cidades</b> que você marcou antes da mudança de servidor do site. Quer trazer todas para esta conta?</p>
+           <p class="muted" style="margin:0">As datas e as lembranças vêm junto.</p>`,
+    actions: [
+      { label: "Agora não", cls: "ghost", onClick: () => { store.set(`por:${me.id}:recuperacao`, "depois"); } },
+      { label: `Trazer ${fmtN(c.n)} cidades`, onClick: () => recoverFromDevice(c) },
+    ] });
+}
+$("recBtn").onclick = () => { const c = oldDeviceCopies(me.id)[0]; if (c) offerRecovery(c); };
 $("expBtn").onclick = () => download(`por-onde-rodei-${today()}.json`, JSON.stringify({ app: "por-onde-rodei", salvoEm: new Date().toISOString(), v: V }, null, 1));
 
 /* ---------- administração ---------- */

@@ -38,6 +38,7 @@
 
   <div class="auth-side">
     <div class="auth-card">
+      <div class="hint move-note" id="moveNote" hidden><b>O site mudou de servidor.</b> Crie sua conta de novo (pode usar o mesmo e-mail). As cidades que ficaram guardadas neste navegador voltam com um clique.</div>
       <div class="auth-tabs" role="tablist">
         <button role="tab" id="tabLogin" aria-selected="true">Entrar</button>
         <button role="tab" id="tabSignup" aria-selected="false">Criar conta</button>
@@ -264,6 +265,7 @@
         <div class="panel">
           <div class="panel-h"><h3>Suas marcações</h3><p class="muted">Traga as cidades da versão do computador ou guarde uma cópia.</p></div>
           <div class="btnrow">
+            <button class="btn" id="recBtn" type="button" hidden>Trazer cidades deste aparelho</button>
             <label class="btn ghost" for="impFile">Importar cópia<input type="file" id="impFile" accept=".json,application/json" hidden></label>
             <button class="btn ghost" id="expBtn">Baixar cópia</button>
           </div>

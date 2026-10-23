@@ -15,8 +15,8 @@ jobs:
     steps:
       - name: Consultar o Supabase
         env:
-          SUPABASE_URL: https://oattcftnzhragczslhoq.supabase.co
-          SUPABASE_KEY: sb_publishable_hZcuiHrRku4pi0gtbN4mJw_5XfxCh8W   # chave pública (a mesma de js/config.js)
+          SUPABASE_URL: https://cmqltjsaivvlfgthikrp.supabase.co
+          SUPABASE_KEY: sb_publishable_QnFFlvFmJfQv1CxXRpqzXw_yT-QE_rL   # chave pública (a mesma de js/config.js)
         run: |
           ping=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST "$SUPABASE_URL/rest/v1/rpc/ping" \
             -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json" -d "{}" || true)
